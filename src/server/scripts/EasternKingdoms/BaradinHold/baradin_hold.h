@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2008-2013 TrinityCore <http://www.trinitycore.org/>
+* Copyright (C) 2008-2014 TrinityCore <http://www.trinitycore.org/>
 *
 * This program is free software; you can redistribute it and/or modify it
 * under the terms of the GNU General Public License as published by the
@@ -30,7 +30,9 @@ enum DataTypes
 {
     DATA_ARGALOTH           = 0,
     DATA_OCCUTHAR           = 1,
-    DATA_ALIZABAL           = 2
+    DATA_ALIZABAL           = 2,
+	DATA_Eye_of_Occuthar,
+	DATA_Focused_Fire_Dummy,	
 };
 
 enum CreatureIds
@@ -41,6 +43,7 @@ enum CreatureIds
 
     NPC_EYE_OF_OCCUTHAR     = 52389,
     NPC_FOCUS_FIRE_DUMMY    = 52369,
+    NPC_Focused_Fire_Dummy  = 62455,	
     NPC_OCCUTHAR_EYE        = 52368
 };
 

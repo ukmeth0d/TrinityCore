@@ -896,6 +896,7 @@ public:
         }
 
         target->SetUInt32Value(UNIT_NPC_EMOTESTATE, emote);
+		WorldDatabase.PExecute("REPLACE INTO `creature_addon` (`guid`, `bytes2`, `emote`) VALUES ('%u', 4097, '%u')", target->GetDBTableGUIDLow(), emote);
 
         return true;
     }

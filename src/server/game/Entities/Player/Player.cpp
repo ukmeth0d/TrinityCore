@@ -549,11 +549,11 @@ inline void KillRewarder::_RewardXP(Player* player, float rate)
     }
 }
 
-inline void KillRewarder::_RewardReputation(Player* player, float rate)
+inline void KillRewarder::_RewardOnKill(Player* player, float rate)
 {
-    // 4.3. Give reputation (player must not be on BG).
+    // 4.3. Give reputation and currency (player must not be on BG).
     // Even dead players and corpses are rewarded.
-    player->RewardReputation(_victim, rate);
+    player->RewardOnKill(_victim, rate);
 }
 
 inline void KillRewarder::_RewardKillCredit(Player* player)
@@ -591,7 +591,7 @@ void KillRewarder::_RewardPlayer(Player* player, bool isDungeon)
         if (!_isBattleGround)
         {
             // If killer is in dungeon then all members receive full reputation at kill.
-            _RewardReputation(player, isDungeon ? 1.0f : rate);
+            _RewardOnKill(player, isDungeon ? 1.0f : rate);
             _RewardKillCredit(player);
         }
     }
@@ -1219,6 +1219,10 @@ bool Player::Create(uint32 guidlow, CharacterCreateInfo* createInfo)
     }
     // all item positions resolved
 
+	// If Warrior, activate Battle Stance on creation.
+	if (getClass() == CLASS_WARRIOR)
+		CastSpell(this, 2457, true); //go into battle stance
+
     return true;
 }
 
@@ -1382,7 +1386,16 @@ void Player::HandleDrowning(uint32 time_diff)
 {
     if (!m_MirrorTimerFlags)
         return;
-
+	bool disableFatigue;
+   
+    switch (GetZoneId())
+    { 
+          case 4815: // Vash'jir Zone 
+          case 5144:
+          case 5145:
+              disableFatigue = true;
+              break;
+    }
     // In water
     if (m_MirrorTimerFlags & UNDERWATER_INWATER)
     {
@@ -1420,7 +1433,7 @@ void Player::HandleDrowning(uint32 time_diff)
     }
 
     // In dark water
-    if (m_MirrorTimerFlags & UNDERWARER_INDARKWATER)
+    if ((m_MirrorTimerFlags & UNDERWARER_INDARKWATER) && !disableFatigue)
     {
         // Fatigue timer not activated - activate it
         if (m_MirrorTimer[FATIGUE_TIMER] == DISABLED_MIRROR_TIMER)
@@ -1904,8 +1917,13 @@ void Player::setDeathState(DeathState s)
         SetUInt32Value(PLAYER_SELF_RES_SPELL, ressSpellId);
 
     if (IsAlive() && !cur)
-        //clear aura case after resurrection by another way (spells will be applied before next death)
-        SetUInt32Value(PLAYER_SELF_RES_SPELL, 0);
+ 	{
+ 		//clear aura case after resurrection by another way (spells will be applied before next death)
+ 		SetUInt32Value(PLAYER_SELF_RES_SPELL, 0);
+ 		if (getClass() == CLASS_WARRIOR)
+ 			CastSpell(this, 2457, true);
+ 	}
+
 }
 
 void Player::InnEnter(time_t time, uint32 mapid, float x, float y, float z)
@@ -6982,8 +7000,8 @@ int32 Player::CalculateReputationGain(ReputationSource source, uint32 creatureOr
     return CalculatePct(rep, percent);
 }
 
-// Calculates how many reputation points player gains in victim's enemy factions
-void Player::RewardReputation(Unit* victim, float rate)
+//Calculates how many reputation points player gains in victim's enemy factions
+void Player::RewardOnKill (Unit *victim, float rate)
 {
     if (!victim || victim->GetTypeId() == TYPEID_PLAYER)
         return;
@@ -6991,8 +7009,9 @@ void Player::RewardReputation(Unit* victim, float rate)
     if (victim->ToCreature()->IsReputationGainDisabled())
         return;
 
-    ReputationOnKillEntry const* Rep = sObjectMgr->GetReputationOnKilEntry(victim->ToCreature()->GetCreatureTemplate()->Entry);
-    if (!Rep)
+    RewardOnKillEntry const* Rew = sObjectMgr->GetRewardOnKillEntry(victim->ToCreature()->GetCreatureTemplate()->Entry);
+
+    if (!Rew)
         return;
 
     uint32 ChampioningFaction = 0;
@@ -7000,35 +7019,97 @@ void Player::RewardReputation(Unit* victim, float rate)
     if (GetChampioningFaction())
     {
         // support for: Championing - http://www.wowwiki.com/Championing
-        Map const* map = GetMap();
-        if (map && map->IsNonRaidDungeon())
-            if (LFGDungeonEntry const* dungeon = GetLFGDungeon(map->GetId(), map->GetDifficulty()))
-                if (dungeon->reclevel == 80)
-                    ChampioningFaction = GetChampioningFaction();
+
+        // Note:
+
+        // "All reputation gains while in dungeons will be applied to your standing with them."
+        //   Alliance and Horde factions championing is allowed in all dungeons
+
+        // "All reputation gains while in level 80 dungeons will be applied to your standing with them."
+        //   Wrath of the Lich King factions championing is allowed in WLK heroic dungeons (level 80) and Cataclysm dungeons (level 80 - 84)
+
+        // "All reputation gains while in level 85 Cataclysm dungeons will be applied to your standing with them."
+        //   Cataclysm factions championing is allowed in Cataclysm heroic dungeons only (level 85)
+
+        Map const *map = GetMap();
+        if (map && map->IsDungeon())
+        {
+            uint32 dungeonLevel = GetChampioningFactionDungeonLevel();
+            if (dungeonLevel)
+            {
+                InstanceTemplate const *instance = sObjectMgr->GetInstanceTemplate(map->GetId());
+                if (instance)
+                {
+                    AccessRequirement const *accessRequirement = sObjectMgr->GetAccessRequirement(map->GetId(), ((InstanceMap*) map)->GetDifficulty());
+                    if (accessRequirement)
+                    {
+                        if (!map->IsRaid() && accessRequirement->levelMin >= dungeonLevel)
+                            ChampioningFaction = GetChampioningFaction();
+                    }
+                }
+            }
+            else
+                ChampioningFaction = GetChampioningFaction();
+        }
     }
 
+    // Favored reputation increase START
+    uint32 zone = GetZoneId();
     uint32 team = GetTeam();
+    float favored_rep_mult = 0;
 
-    if (Rep->RepFaction1 && (!Rep->TeamDependent || team == ALLIANCE))
+    if ((HasAura(32096) || HasAura(32098)) && (zone == 3483 || zone == 3562 || zone == 3836 || zone == 3713 || zone == 3714))
+        favored_rep_mult = 0.25;          // Thrallmar's Favor and Honor Hold's Favor
+    else if (HasAura(30754) && (Rew->repfaction1 == 609 || Rew->repfaction2 == 609) && !ChampioningFaction)
+        favored_rep_mult = 0.25;          // Cenarion Favor
+
+    if (favored_rep_mult > 0)
+        favored_rep_mult *= 2;          // Multiplied by 2 because the reputation is divided by 2 for some reason (See "donerep1 / 2" and "donerep2 / 2") -- if you know why this is done, please update/explain :)
+    // Favored reputation increase END
+
+    bool recruitAFriend = GetsRecruitAFriendBonus(false);
+
+    if (Rew->repfaction1 && (!Rew->team_dependent || team == ALLIANCE))
     {
-        int32 donerep1 = CalculateReputationGain(REPUTATION_SOURCE_KILL, victim->getLevel(), Rep->RepValue1, ChampioningFaction ? ChampioningFaction : Rep->RepFaction1);
-        donerep1 = int32(donerep1 * rate);
+        int32 donerep1 = CalculateReputationGain(REPUTATION_SOURCE_KILL, Rew->repvalue1, ChampioningFaction ? ChampioningFaction : Rew->repfaction1, false);
+        donerep1 = int32(donerep1 * (rate + favored_rep_mult));
 
-        FactionEntry const* factionEntry1 = sFactionStore.LookupEntry(ChampioningFaction ? ChampioningFaction : Rep->RepFaction1);
+        if (recruitAFriend)
+            donerep1 = int32(donerep1 * (1 + sWorld->getRate(RATE_REPUTATION_RECRUIT_A_FRIEND_BONUS)));
+
+        FactionEntry const *factionEntry1 = sFactionStore.LookupEntry(ChampioningFaction ? ChampioningFaction : Rew->repfaction1);
         uint32 current_reputation_rank1 = GetReputationMgr().GetRank(factionEntry1);
-        if (factionEntry1 && current_reputation_rank1 <= Rep->ReputationMaxCap1)
+        if (factionEntry1 && current_reputation_rank1 <= Rew->reputation_max_cap1)
             GetReputationMgr().ModifyReputation(factionEntry1, donerep1);
     }
 
-    if (Rep->RepFaction2 && (!Rep->TeamDependent || team == HORDE))
+    if (Rew->repfaction2 && (!Rew->team_dependent || team == HORDE))
     {
-        int32 donerep2 = CalculateReputationGain(REPUTATION_SOURCE_KILL, victim->getLevel(), Rep->RepValue2, ChampioningFaction ? ChampioningFaction : Rep->RepFaction2);
-        donerep2 = int32(donerep2 * rate);
+        int32 donerep2 = CalculateReputationGain(REPUTATION_SOURCE_KILL, Rew->repvalue2, ChampioningFaction ? ChampioningFaction : Rew->repfaction2, false);
+        donerep2 = int32(donerep2 * (rate + favored_rep_mult));
 
-        FactionEntry const* factionEntry2 = sFactionStore.LookupEntry(ChampioningFaction ? ChampioningFaction : Rep->RepFaction2);
+        if (recruitAFriend)
+            donerep2 = int32(donerep2 * (1 + sWorld->getRate(RATE_REPUTATION_RECRUIT_A_FRIEND_BONUS)));
+
+        FactionEntry const *factionEntry2 = sFactionStore.LookupEntry(ChampioningFaction ? ChampioningFaction : Rew->repfaction2);
         uint32 current_reputation_rank2 = GetReputationMgr().GetRank(factionEntry2);
-        if (factionEntry2 && current_reputation_rank2 <= Rep->ReputationMaxCap2)
+        if (factionEntry2 && current_reputation_rank2 <= Rew->reputation_max_cap2)
             GetReputationMgr().ModifyReputation(factionEntry2, donerep2);
+    }
+
+    if (Rew->currencyid1 && Rew->currencycount1)
+    {
+        ModifyCurrency(Rew->currencyid1, Rew->currencycount1);
+    }
+
+    if (Rew->currencyid2 && Rew->currencycount2)
+    {
+        ModifyCurrency(Rew->currencyid2, Rew->currencycount2);
+    }
+
+    if (Rew->currencyid3 && Rew->currencycount3)
+    {
+        ModifyCurrency(Rew->currencyid3, Rew->currencycount3);
     }
 }
 
@@ -7478,6 +7559,10 @@ void Player::ModifyCurrency(uint32 id, int32 count, bool printLog/* = true*/, bo
         oldTotalCount = itr->second.totalCount;
         oldWeekCount = itr->second.weekCount;
     }
+	
+    float mod = float(GetMaxPositiveAuraModifierByMiscValue(SPELL_AURA_MOD_CURRENCY_GAIN,int32(id)));
+    if (count > 0)
+        count += int32(floor(count * (mod/100)));	
 
     // count can't be more then weekCap if used (weekCap > 0)
     uint32 weekCap = GetCurrencyWeekCap(currency);
@@ -8288,8 +8373,14 @@ void Player::_ApplyItemBonuses(ItemTemplate const* proto, uint8 slot, bool apply
                 ApplyRatingMod(CR_ARMOR_PENETRATION, int32(val), apply);
                 break;
             case ITEM_MOD_SPELL_POWER:
+            {
+                int32 mod = GetTotalAuraModifier(SPELL_AURA_MOD_SPELL_POWER_PCT);
+                if (mod > 0)
+                    val *= 1.0 + mod / 100.0f;
+
                 ApplySpellPowerBonus(int32(val), apply);
                 break;
+            }
             case ITEM_MOD_HEALTH_REGEN:
                 ApplyHealthRegenBonus(int32(val), apply);
                 break;
@@ -9901,9 +9992,39 @@ void Player::SendInitWorldStates(uint32 zoneid, uint32 areaid)
             }
             break;
         // Battle for Gilneas
-        case 5449:
+        case 5449:                                          // The Battle for Gilneas
             if (bg && bg->GetTypeID(true) == BATTLEGROUND_BFG)
                 bg->FillInitialWorldStates(data);
+            else
+            {
+                data << uint32(0x6e7) << uint32(0x0);       // 1  1767 Lighthouse Alliance
+                data << uint32(0x6e8) << uint32(0x0);       // 2  1768 Lighthouse Horde
+                data << uint32(0x6e9) << uint32(0x0);       // 3  1769 Lighthouse In Conflict
+                data << uint32(0x6ea) << uint32(0x0);       // 4  1770 Lighthouse In Conflict 2
+                data << uint32(0x6ec) << uint32(0x0);       // 5  1772 Mines Alliance
+                data << uint32(0x6ed) << uint32(0x0);       // 6  1773 Mines Horde
+                data << uint32(0x6ee) << uint32(0x0);       // 7  1774 Mines In Conflict
+                data << uint32(0x6ef) << uint32(0x0);       // 8  1775 Mines In Conflict 2
+                data << uint32(0x6f0) << uint32(0x0);       // 9  1776 Alliance Resources
+                data << uint32(0x6f1) << uint32(0x0);       // 10 1777 Horde Resources
+                data << uint32(0x6f2) << uint32(0x0);       // 11 1778 Horde Bases
+                data << uint32(0x6f3) << uint32(0x0);       // 12 1779 Alliance Bases
+                data << uint32(0x6f4) << uint32(0x7d0);     // 13 1780 Max Resources (2000)
+                data << uint32(0x6f6) << uint32(0x0);       // 14 1782 Waterworks Alliance
+                data << uint32(0x6f7) << uint32(0x0);       // 15 1783 Waterworks Horde
+                data << uint32(0x6f8) << uint32(0x0);       // 16 1784 Waterworks In Conflict
+                data << uint32(0x6f9) << uint32(0x0);       // 17 1785 Waterworks In Conflict 2
+                data << uint32(0x6fb) << uint32(0x0);       // 18 1787 Stoneward Prison Alliance
+                data << uint32(0x6fc) << uint32(0x0);       // 19 1788 Stoneward Prison Horde
+                data << uint32(0x6fd) << uint32(0x0);       // 20 1789 Stoneward Prison In Conflict
+                data << uint32(0x6fe) << uint32(0x0);       // 21 1790 Stoneward Prison In Conflict 2
+                data << uint32(0x732) << uint32(0x1);       // 22 1842 Lighthouse Uncontrolled
+                data << uint32(0x733) << uint32(0x1);       // 23 1843 Stoneward Prison Uncontrolled
+                data << uint32(0x735) << uint32(0x1);       // 24 1845 Mines Uncontrolled
+                data << uint32(0x736) << uint32(0x1);       // 25 1846 Waterworks Uncontrolled
+                data << uint32(0x745) << uint32(0x2);       // 26 1861 unk
+                data << uint32(0x7a3) << uint32(0x708);     // 27 1955 Warning limit (1800)
+            }
             break;
         // Wintergrasp
         case 4197:
@@ -10194,10 +10315,18 @@ uint8 Player::FindEquipSlot(ItemTemplate const* proto, uint32 slot, bool swap) c
             break;
         case INVTYPE_RELIC:
         {
-           if (playerClass == CLASS_PALADIN || playerClass == CLASS_DRUID ||
-               playerClass == CLASS_SHAMAN || playerClass == CLASS_DEATH_KNIGHT)
-               slots[0] = EQUIPMENT_SLOT_RANGED;
-           break;
+            switch (proto->SubClass)
+            {
+                case ITEM_SUBCLASS_ARMOR_MISCELLANEOUS:
+                    if (playerClass == CLASS_WARLOCK)
+                        slots[0] = EQUIPMENT_SLOT_RANGED;
+                    break;
+                case ITEM_SUBCLASS_ARMOR_RELIC:
+                    if (playerClass == CLASS_PALADIN || playerClass == CLASS_DRUID || playerClass == CLASS_SHAMAN || playerClass == CLASS_DEATH_KNIGHT)
+                        slots[0] = EQUIPMENT_SLOT_RANGED;
+                    break;
+            }
+            break;
         }
         default:
             return NULL_SLOT;
@@ -11957,7 +12086,7 @@ InventoryResult Player::CanRollForItemInLFG(ItemTemplate const* proto, WorldObje
     if (proto->Class == ITEM_CLASS_WEAPON && GetSkillValue(item_weapon_skills[proto->SubClass]) == 0)
         return EQUIP_ERR_PROFICIENCY_NEEDED;
 
-    if (proto->Class == ITEM_CLASS_ARMOR && proto->SubClass > ITEM_SUBCLASS_ARMOR_MISCELLANEOUS && proto->SubClass < ITEM_SUBCLASS_ARMOR_BUCKLER && proto->InventoryType != INVTYPE_CLOAK)
+    if (proto->Class == ITEM_CLASS_ARMOR && proto->SubClass > ITEM_SUBCLASS_ARMOR_MISCELLANEOUS && proto->InventoryType != INVTYPE_CLOAK)
     {
         if (_class == CLASS_WARRIOR || _class == CLASS_PALADIN || _class == CLASS_DEATH_KNIGHT)
         {
@@ -15503,14 +15632,17 @@ void Player::RewardQuest(Quest const* quest, uint32 reward, Object* questGiver, 
     }
     else if (quest->GetRewSpell() > 0)
     {
+		/*
         SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(quest->GetRewSpell());
+
         if (questGiver->isType(TYPEMASK_UNIT) && !spellInfo->HasEffect(SPELL_EFFECT_LEARN_SPELL) && !spellInfo->HasEffect(SPELL_EFFECT_CREATE_ITEM))
         {
             if (Creature* creature = GetMap()->GetCreature(questGiver->GetGUID()))
                 creature->CastSpell(this, quest->GetRewSpell(), true);
         }
         else
-            CastSpell(this, quest->GetRewSpell(), true);
+		*/
+        CastSpell(this, quest->GetRewSpell(), true);
     }
 
     if (quest->GetZoneOrSort() > 0)
@@ -20764,32 +20896,6 @@ void Player::RemovePet(Pet* pet, PetSaveMode mode, bool returnreagent)
             return;
     }
 
-    if (returnreagent && (pet || m_temporaryUnsummonedPetNumber) && !InBattleground())
-    {
-        //returning of reagents only for players, so best done here
-        uint32 spellId = pet ? pet->GetUInt32Value(UNIT_CREATED_BY_SPELL) : m_oldpetspell;
-        SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(spellId);
-
-        if (spellInfo)
-        {
-            for (uint32 i = 0; i < MAX_SPELL_REAGENTS; ++i)
-            {
-                if (spellInfo->Reagent[i] > 0)
-                {
-                    ItemPosCountVec dest;                   //for succubus, voidwalker, felhunter and felguard credit soulshard when despawn reason other than death (out of range, logout)
-                    InventoryResult msg = CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, spellInfo->Reagent[i], spellInfo->ReagentCount[i]);
-                    if (msg == EQUIP_ERR_OK)
-                    {
-                        Item* item = StoreNewItem(dest, spellInfo->Reagent[i], true);
-                        if (IsInWorld())
-                            SendNewItem(item, spellInfo->ReagentCount[i], true, false);
-                    }
-                }
-            }
-        }
-        m_temporaryUnsummonedPetNumber = 0;
-    }
-
     if (!pet || pet->GetOwnerGUID() != GetGUID())
         return;
 
@@ -22663,6 +22769,27 @@ void Player::ModifySpellCooldown(uint32 spellId, int32 cooldown)
     GetSession()->SendPacket(&data);
 
     TC_LOG_DEBUG("misc", "ModifySpellCooldown:: Player: %s (GUID: %u) Spell: %u cooldown: %u", GetName().c_str(), GetGUIDLow(), spellId, GetSpellCooldownDelay(spellId));
+}
+
+void Player::ReduceSpellCooldown(uint32 spell_id, uint32 seconds)
+{
+    if (HasSpellCooldown(spell_id))
+    {
+        uint32 newCooldownDelay = GetSpellCooldownDelay(spell_id);
+
+        if (newCooldownDelay < seconds/1000 + 1)
+            newCooldownDelay = 0;
+        else
+            newCooldownDelay -= seconds/1000;
+
+        this->AddSpellCooldown(spell_id, 0, uint32(time(NULL) + newCooldownDelay));
+
+        WorldPacket data(SMSG_MODIFY_COOLDOWN, 4 + 8 + 4);
+        data << uint32(spell_id); // Spell ID
+        data << uint64(GetGUID()); // Player GUID
+        data << uint32(seconds); // Cooldown mod in milliseconds
+        GetSession()->SendPacket(&data);
+    }
 }
 
 void Player::SendCooldownEvent(SpellInfo const* spellInfo, uint32 itemId /*= 0*/, Spell* spell /*= NULL*/, bool setCooldown /*= true*/)
@@ -25944,6 +26071,12 @@ bool Player::LearnTalent(uint32 talentId, uint32 talentRank)
     AddTalent(spellid, GetActiveSpec(), true);
 
     TC_LOG_INFO("misc", "TalentID: %u Rank: %u Spell: %u Spec: %u\n", talentId, talentRank, spellid, GetActiveSpec());
+	
+    // Save Talents
+    SQLTransaction trans = CharacterDatabase.BeginTransaction();
+    _SaveTalents(trans);
+    _SaveSpells(trans);
+    CharacterDatabase.CommitTransaction(trans);
 
     // set talent tree for player
     if (!GetPrimaryTalentTree(GetActiveSpec()))
@@ -25963,7 +26096,8 @@ bool Player::LearnTalent(uint32 talentId, uint32 talentRank)
 
     // update free talent points
     SetFreeTalentPoints(CurTalentPoints - (talentRank - curtalent_maxrank + 1));
-    return true;
+    
+	return true;
 }
 
 void Player::LearnPetTalent(uint64 petGuid, uint32 talentId, uint32 talentRank)

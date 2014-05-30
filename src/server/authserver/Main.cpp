@@ -112,9 +112,18 @@ extern int main(int argc, char** argv)
     }
 
     TC_LOG_INFO("server.authserver", "%s (authserver)", _FULLVERSION);
-    TC_LOG_INFO("server.authserver", "<Ctrl-C> to stop.\n");
+	TC_LOG_INFO("server.authserver", " ");
+	TC_LOG_INFO("server.worldserver", " A World of Warcraft Cataclsym 4.3.4 Emulator	");
+	TC_LOG_INFO("server.authserver", "       _/_/              _/          _/_/_/    _/_/    _/_/_/    _/_/_/_/  ");
+	TC_LOG_INFO("server.authserver", "    _/    _/  _/  _/_/  _/  _/    _/        _/    _/  _/    _/  _/         ");
+	TC_LOG_INFO("server.authserver", "   _/_/_/_/  _/_/      _/_/      _/        _/    _/  _/_/_/    _/_/_/      ");
+	TC_LOG_INFO("server.authserver", "  _/    _/  _/        _/  _/    _/        _/    _/  _/    _/  _/           ");
+	TC_LOG_INFO("server.authserver", " _/    _/  _/        _/    _/    _/_/_/    _/_/    _/    _/  _/_/_/_/  	");
+	TC_LOG_INFO("server.authserver", " Arkania Community (c) 2014!");
+	TC_LOG_INFO("server.authserver", "      <http://arkania.net/>");
+	TC_LOG_INFO("server.authserver", " ");    
+	TC_LOG_INFO("server.authserver", "<Ctrl-C> to stop.\n");
     TC_LOG_INFO("server.authserver", "Using configuration file %s.", configFile);
-
     TC_LOG_WARN("server.authserver", "%s (Library: %s)", OPENSSL_VERSION_TEXT, SSLeay_version(SSLEAY_VERSION));
 
 #if defined (ACE_HAS_EVENT_POLL) || defined (ACE_HAS_DEV_POLL)

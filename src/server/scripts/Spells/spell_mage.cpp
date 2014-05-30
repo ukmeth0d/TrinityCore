@@ -60,6 +60,7 @@ enum MageSpells
     SPELL_MAGE_SUMMON_WATER_ELEMENTAL_PERMANENT  = 70908,
     SPELL_MAGE_SUMMON_WATER_ELEMENTAL_TEMPORARY  = 70907,
     SPELL_MAGE_GLYPH_OF_BLAST_WAVE               = 62126,
+	SPELL_MAGE_ARCANE_MISSILES					 = 109901,	
 
     SPELL_MAGE_FLAMESTRIKE                       = 2120,
 
@@ -1456,6 +1457,79 @@ class spell_mage_water_elemental_freeze : public SpellScriptLoader
        }
 };
 
+class spell_mage_fingers_of_frost : public SpellScriptLoader
+{
+    public:
+        spell_mage_fingers_of_frost() : SpellScriptLoader("spell_mage_fingers_of_frost") { }
+
+        class spell_mage_fingers_of_frost_SpellScript : public SpellScript
+        {
+            PrepareSpellScript(spell_mage_fingers_of_frost_SpellScript);
+
+            void HandleAfterCast()
+            {
+                if(Unit * caster = GetCaster())
+                    if (Aura * fingersOfFrost = caster->GetAura(SPELL_MAGE_FINGERS_OF_FROST))
+                        caster->RemoveAuraFromStack(SPELL_MAGE_FINGERS_OF_FROST);
+            }
+
+            void Register()
+            {
+                AfterCast += SpellCastFn(spell_mage_fingers_of_frost_SpellScript::HandleAfterCast);
+            }
+        };
+
+        SpellScript* GetSpellScript() const
+        {
+            return new spell_mage_fingers_of_frost_SpellScript();
+        }
+};
+
+// Incanter's Absorption
+class spell_mage_incanters_absorbtion_absorb : public SpellScriptLoader
+{
+public:
+    spell_mage_incanters_absorbtion_absorb() : SpellScriptLoader("spell_mage_incanters_absorbtion_absorb") { }
+
+    class spell_mage_incanters_absorbtion_absorb_AuraScript : public spell_mage_incanters_absorbtion_base_AuraScript
+    {
+        PrepareAuraScript(spell_mage_incanters_absorbtion_absorb_AuraScript);
+
+        void Register() override
+        {
+             AfterEffectAbsorb += AuraEffectAbsorbFn(spell_mage_incanters_absorbtion_absorb_AuraScript::Trigger, EFFECT_0);
+        }
+    };
+
+    AuraScript* GetAuraScript() const override
+    {
+        return new spell_mage_incanters_absorbtion_absorb_AuraScript();
+    }
+};
+
+// Incanter's Absorption
+class spell_mage_incanters_absorbtion_manashield : public SpellScriptLoader
+{
+public:
+    spell_mage_incanters_absorbtion_manashield() : SpellScriptLoader("spell_mage_incanters_absorbtion_manashield") { }
+
+    class spell_mage_incanters_absorbtion_manashield_AuraScript : public spell_mage_incanters_absorbtion_base_AuraScript
+    {
+        PrepareAuraScript(spell_mage_incanters_absorbtion_manashield_AuraScript);
+
+        void Register() override
+        {
+             AfterEffectManaShield += AuraEffectManaShieldFn(spell_mage_incanters_absorbtion_manashield_AuraScript::Trigger, EFFECT_0);
+        }
+    };
+
+    AuraScript* GetAuraScript() const override
+    {
+        return new spell_mage_incanters_absorbtion_manashield_AuraScript();
+    }
+};
+
+
 void AddSC_mage_spell_scripts()
 {
     new spell_mage_arcane_potency();
@@ -1486,4 +1560,7 @@ void AddSC_mage_spell_scripts()
     new spell_mage_ring_of_frost_freeze();
     new spell_mage_time_warp();
     new spell_mage_water_elemental_freeze();
+	new spell_mage_fingers_of_frost();
+	new spell_mage_incanters_absorbtion_absorb();
+	new spell_mage_incanters_absorbtion_manashield();	
 }

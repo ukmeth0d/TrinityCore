@@ -1,5 +1,5 @@
 ################################################
-# Trinity Core World Server configuration file #
+# ArkCORE World Server configuration file #
 ################################################
 [worldserver]
 
@@ -62,7 +62,7 @@ RealmID = 1
 #    DataDir
 #        Description: Data directory setting.
 #        Important:   DataDir needs to be quoted, as the string might contain space characters.
-#        Example:     "@prefix@/share/trinitycore"
+#        Example:     "@prefix@/share/arkcore"
 #        Default:     "."
 
 DataDir = "."
@@ -87,13 +87,13 @@ LogsDir = ""
 #                                                                 section my.ini)
 #                     ".;/path/to/unix_socket;username;password;database" - (use Unix sockets on
 #                                                                           Unix/Linux)
-#        Default:     "127.0.0.1;3306;trinity;trinity;auth"       - (LoginDatabaseInfo)
-#                     "127.0.0.1;3306;trinity;trinity;world"      - (WorldDatabaseInfo)
-#                     "127.0.0.1;3306;trinity;trinity;characters" - (CharacterDatabaseInfo)
+#        Default:     "127.0.0.1;3306;arkania;arkania;auth"       - (LoginDatabaseInfo)
+#                     "127.0.0.1;3306;arkania;arkania;world"      - (WorldDatabaseInfo)
+#                     "127.0.0.1;3306;arkania;arkania;characters" - (CharacterDatabaseInfo)
 
-LoginDatabaseInfo     = "127.0.0.1;3306;trinity;trinity;auth"
-WorldDatabaseInfo     = "127.0.0.1;3306;trinity;trinity;world"
-CharacterDatabaseInfo = "127.0.0.1;3306;trinity;trinity;characters"
+LoginDatabaseInfo     = "127.0.0.1;3306;arkania;arkania;auth"
+WorldDatabaseInfo     = "127.0.0.1;3306;arkania;arkania;world"
+CharacterDatabaseInfo = "127.0.0.1;3306;arkania;arkania;characters"
 
 #
 #    LoginDatabase.WorkerThreads
@@ -964,7 +964,7 @@ ClientCacheVersion = 0
 #        Default:     0 - (Disabled)
 #                     1 - (Enabled)
 
-Event.Announce = 0
+Event.Announce = 1
 
 #
 #    BeepAtStart
@@ -978,10 +978,10 @@ BeepAtStart = 1
 #    Motd
 #        Description: Message of the Day, displayed at login.
 #                     Use '@' for a newline and be sure to escape special characters.
-#        Example:     "Welcome to John\'s Server@This server runs on Trinity Core."
-#        Default:     "Welcome to a Trinity Core server."
+#        Example:     "Welcome to John\'s Server@This server runs on ArkCORE."
+#        Default:     "Welcome to a ArkCORE server."
 
-Motd = "Welcome to a Trinity Core server."
+Motd = "Welcome to a ArkCORE server.@Please type .serv info por more information"
 
 #
 #    Server.LoginInfo
@@ -1977,7 +1977,7 @@ Battleground.CastDeserter = 1
 #        Default:     0 - (Disabled)
 #                     1 - (Enabled)
 
-Battleground.QueueAnnouncer.Enable = 0
+Battleground.QueueAnnouncer.Enable = 1
 
 #
 #    Battleground.QueueAnnouncer.PlayerOnly
@@ -2021,7 +2021,7 @@ BattleGround.PremadeGroupWaitForMatch = 1800000
 #        Default:     0 - (Disabled)
 #                     1 - (Enabled)
 
-Battleground.GiveXPForKills = 0
+Battleground.GiveXPForKills = 1
 
 #
 #    Battleground.Random.ResetHour
@@ -2047,12 +2047,12 @@ Battleground.Random.ResetHour = 6
 #                     5  - Battleground.RewardLoserHonorLast
 #
 
-Battleground.RewardWinnerHonorFirst     = 27000
-Battleground.RewardWinnerConquestFirst  = 10000
-Battleground.RewardWinnerHonorLast      = 13500
-Battleground.RewardWinnerConquestLast   = 5000
-Battleground.RewardLoserHonorFirst      = 4500
-Battleground.RewardLoserHonorLast       = 3500
+Battleground.RewardWinnerHonorFirst     = 30
+Battleground.RewardWinnerConquestFirst  = 25
+Battleground.RewardWinnerHonorLast      = 15
+Battleground.RewardWinnerConquestLast   = 0
+Battleground.RewardLoserHonorFirst      = 5
+Battleground.RewardLoserHonorLast       = 5
 
 #
 ###################################################################################################
@@ -2077,9 +2077,9 @@ Wintergrasp.PlayerMax = 100
 #
 #     Wintergrasp.PlayerMin
 #         Description: Minimum number of players required for Wintergrasp.
-#         Default:     0
+#         Default:     2
 
-Wintergrasp.PlayerMin = 0
+Wintergrasp.PlayerMin = 2
 
 #
 #     Wintergrasp.PlayerMinLvl
@@ -2161,14 +2161,14 @@ Arena.AutoDistributeInterval = 7
 #        Default:     0 - (Disabled)
 #                     1 - (Enabled)
 
-Arena.QueueAnnouncer.Enable = 0
+Arena.QueueAnnouncer.Enable = 1
 
 #
 #    Arena.ArenaSeason.ID
 #        Description: Current arena season id shown in clients.
-#        Default:     8
+#        Default:     11
 
-Arena.ArenaSeason.ID = 8
+Arena.ArenaSeason.ID = 11
 
 #
 #    Arena.ArenaSeason.InProgress
@@ -2540,6 +2540,15 @@ PlayerDump.DisallowPaths = 1
 PlayerDump.DisallowOverwrite = 1
 
 #
+#   DuelResetCooldown
+#   Description: Reseting cooldown and restore health when duel finished in the follow zones:
+#   Elwyn Forest, Durotar, Tirisfal, Tendrasil, Dun Morogh, Gurubashi Arena, Exodar, Mulgore
+#   Default: 1
+#
+
+DuelResetCooldown = 1
+
+#
 #     UI.ShowQuestLevelsInDialogs
 #        Description: Show quest levels next to quest titles in UI dialogs
 #        Example:     [13] Westfall Stew
@@ -2794,10 +2803,10 @@ Currency.StartHonorPoints = 0
 #
 #    Currency.MaxHonorPoints
 #        Amount honor points a player can have
-#        Default: 4000
+#        Default: 7000
 #
 
-Currency.MaxHonorPoints = 4000
+Currency.MaxHonorPoints = 7000
 
 #
 #    Currency.StartJusticePoints
@@ -2810,10 +2819,10 @@ Currency.StartJusticePoints = 0
 #
 #    Currency.MaxJusticePoints
 #        Amount justice points a player can have
-#        Default: 4000
+#        Default: 7000
 #
 
-Currency.MaxJusticePoints = 4000
+Currency.MaxJusticePoints = 7000
 
 #
 #    Currency.StartConquestPoints

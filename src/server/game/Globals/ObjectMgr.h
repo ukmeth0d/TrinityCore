@@ -1,5 +1,9 @@
 /*
+ *
+ * Copyright (C) 2011-2014 ArkCORE <http://www.arkania.net/>
+ *
  * Copyright (C) 2008-2014 TrinityCore <http://www.trinitycore.org/>
+ *
  * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -466,7 +470,7 @@ typedef std::unordered_map<uint32/*cell_id*/, CellObjectGuids> CellObjectGuidsMa
 typedef std::unordered_map<uint32/*(mapid, spawnMode) pair*/, CellObjectGuidsMap> MapObjectGuids;
 
 // Trinity string ranges
-#define MIN_TRINITY_STRING_ID           1                    // 'trinity_string'
+#define MIN_TRINITY_STRING_ID           1                    // 'arkcore_string'
 #define MAX_TRINITY_STRING_ID           2000000000
 #define MIN_DB_SCRIPT_STRING_ID        MAX_TRINITY_STRING_ID // 'db_script_string'
 #define MAX_DB_SCRIPT_STRING_ID        2000010000
@@ -531,17 +535,23 @@ struct RepRewardRate
     float spellRate;
 };
 
-struct ReputationOnKillEntry
+struct RewardOnKillEntry
 {
-    uint32 RepFaction1;
-    uint32 RepFaction2;
-    uint32 ReputationMaxCap1;
-    int32 RepValue1;
-    uint32 ReputationMaxCap2;
-    int32 RepValue2;
-    bool IsTeamAward1;
-    bool IsTeamAward2;
-    bool TeamDependent;
+    uint32 repfaction1;
+    uint32 repfaction2;
+    bool is_teamaward1;
+    uint32 reputation_max_cap1;
+    int32 repvalue1;
+    bool is_teamaward2;
+    uint32 reputation_max_cap2;
+    int32 repvalue2;
+    bool team_dependent;
+    uint32 currencyid1;
+    uint32 currencyid2;
+    uint32 currencyid3;
+    int32 currencycount1;
+    int32 currencycount2;
+    int32 currencycount3;
 };
 
 struct RepSpilloverTemplate
@@ -715,8 +725,9 @@ class ObjectMgr
         typedef std::unordered_map<uint32, AccessRequirement*> AccessRequirementContainer;
 
         typedef std::unordered_map<uint32, RepRewardRate > RepRewardRateContainer;
-        typedef std::unordered_map<uint32, ReputationOnKillEntry> RepOnKillContainer;
+        typedef std::unordered_map<uint32, RewardOnKillEntry> RepOnKillContainer;
         typedef std::unordered_map<uint32, RepSpilloverTemplate> RepSpilloverTemplateContainer;
+
 
         typedef std::unordered_map<uint32, PointOfInterest> PointOfInterestContainer;
 
@@ -845,10 +856,10 @@ class ObjectMgr
             return NULL;
         }
 
-        ReputationOnKillEntry const* GetReputationOnKilEntry(uint32 id) const
+        RewardOnKillEntry const* GetRewardOnKillEntry(uint32 id) const
         {
-            RepOnKillContainer::const_iterator itr = _repOnKillStore.find(id);
-            if (itr != _repOnKillStore.end())
+            RepOnKillContainer::const_iterator itr = _RewOnKill.find(id);
+            if (itr != _RewOnKill.end())
                 return &itr->second;
             return NULL;
         }
@@ -947,7 +958,7 @@ class ObjectMgr
         void LoadBroadcastTexts();
         void LoadBroadcastTextLocales();
         bool LoadTrinityStrings(char const* table, int32 min_value, int32 max_value);
-        bool LoadTrinityStrings() { return LoadTrinityStrings("trinity_string", MIN_TRINITY_STRING_ID, MAX_TRINITY_STRING_ID); }
+        bool LoadTrinityStrings() { return LoadTrinityStrings("arkcore_string", MIN_TRINITY_STRING_ID, MAX_TRINITY_STRING_ID); }
         void LoadDbScriptStrings();
         void LoadCreatureClassLevelStats();
         void LoadCreatureLocales();
@@ -1000,7 +1011,7 @@ class ObjectMgr
         void LoadFishingBaseSkillLevel();
 
         void LoadReputationRewardRate();
-        void LoadReputationOnKill();
+        void LoadRewardOnKill();
         void LoadReputationSpilloverTemplate();
 
         void LoadPointsOfInterest();
@@ -1354,7 +1365,7 @@ class ObjectMgr
         DungeonEncounterContainer _dungeonEncounterStore;
 
         RepRewardRateContainer _repRewardRateStore;
-        RepOnKillContainer _repOnKillStore;
+        RepOnKillContainer        _RewOnKill;
         RepSpilloverTemplateContainer _repSpilloverTemplateStore;
 
         GossipMenusContainer _gossipMenusStore;

@@ -1,5 +1,9 @@
 /*
+ *
+ * Copyright (C) 2011-2014 ArkCORE <http://www.arkania.net/>
+ *
  * Copyright (C) 2008-2014 TrinityCore <http://www.trinitycore.org/>
+ *
  * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -1303,6 +1307,23 @@ namespace Trinity
             uint32 m_uiEntry;
             float m_fRange;
     };
+	
+    class AllCreaturesOfEntryInGrid
+    {
+    public:
+        AllCreaturesOfEntryInGrid (const WorldObject* pObject, uint32 uiEntry) : m_pObject(pObject), m_uiEntry(uiEntry)
+        {
+        }
+        bool operator() (Unit* pUnit)
+        {
+            if (pUnit->GetEntry() == m_uiEntry)
+                return true;
+            return false;
+        }
+    private:
+        const WorldObject* m_pObject;
+        uint32 m_uiEntry;
+    };	
 
     class PlayerAtMinimumRangeAway
     {

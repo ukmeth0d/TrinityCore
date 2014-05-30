@@ -1,5 +1,9 @@
 /*
+ *
+ * Copyright (C) 2011-2014 ArkCORE <http://www.arkania.net/>
+ *
  * Copyright (C) 2008-2014 TrinityCore <http://www.trinitycore.org/>
+ *
  * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -3469,7 +3473,7 @@ void Spell::update(uint32 difftime)
         !m_caster->HasAuraTypeWithAffectMask(SPELL_AURA_CAST_WHILE_WALKING, m_spellInfo))
     {
         // don't cancel for melee, autorepeat, triggered and instant spells
-        if (!IsNextMeleeSwingSpell() && !IsAutoRepeat() && !IsTriggered())
+        if (!IsNextMeleeSwingSpell() && !IsAutoRepeat() && !IsTriggered() && !m_caster->HasAuraTypeWithAffectMask(SPELL_AURA_CAST_WHILE_WALKING, m_spellInfo))
             cancel();
     }
 
@@ -3479,6 +3483,14 @@ void Spell::update(uint32 difftime)
         {
             if (m_timer > 0)
             {
+                // Cancel the cast if the target is not in line of sight
+                if (m_targets.GetUnitTarget() && !m_caster->IsWithinLOSInMap(m_targets.GetUnitTarget()))
+                {
+                    SendCastResult(SPELL_FAILED_LINE_OF_SIGHT);
+                    cancel();
+                    return;
+                }
+
                 if (difftime >= (uint32)m_timer)
                     m_timer = 0;
                 else
@@ -4854,6 +4866,10 @@ SpellCastResult Spell::CheckCast(bool strict)
             if (m_caster->GetEntry() != WORLD_TRIGGER) // Ignore LOS for gameobjects casts (wrongly cast by a trigger)
                 if (!(m_spellInfo->AttributesEx2 & SPELL_ATTR2_CAN_TARGET_NOT_IN_LOS) && !DisableMgr::IsDisabledFor(DISABLE_TYPE_SPELL, m_spellInfo->Id, NULL, SPELL_DISABLE_LOS) && !m_caster->IsWithinLOSInMap(target))
                     return SPELL_FAILED_LINE_OF_SIGHT;
+
+            if (!IsTriggered()) // Smoke Bomb
+              if (m_caster->IsVisionObscured(target))
+                  return SPELL_FAILED_BAD_TARGETS;
         }
     }
 
@@ -5408,8 +5424,6 @@ SpellCastResult Spell::CheckCast(bool strict)
             }
             case SPELL_AURA_MOUNTED:
             {
-                if (m_caster->IsInWater())
-                    return SPELL_FAILED_ONLY_ABOVEWATER;
 
                 // Ignore map check if spell have AreaId. AreaId already checked and this prevent special mount spells
                 bool allowMount = !m_caster->GetMap()->IsDungeon() || m_caster->GetMap()->IsBattlegroundOrArena();

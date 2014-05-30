@@ -61,6 +61,57 @@ class npc_pet_pri_lightwell : public CreatureScript
         }
 };
 
+/*######
+# npc_shadowfiend
+######*/
+
+enum Shadowfiend
+{
+    MANA_LEECH                       = 28305,
+    GLYPH_OF_SHADOWFIEND_MANA        = 58227,
+    GLYPH_OF_SHADOWFIEND             = 58228
+};
+
+class npc_shadowfiend : public CreatureScript
+{
+public:
+    npc_shadowfiend() : CreatureScript("npc_shadowfiend") { }
+
+    struct npc_shadowfiendAI : public ScriptedAI
+    {
+        npc_shadowfiendAI(Creature* creature) : ScriptedAI(creature) {}
+
+        void Reset() override
+        {
+            if (me->IsSummon())
+                if (Unit* owner = me->ToTempSummon()->GetSummoner())
+                    if (Unit* pet = owner->GetGuardianPet())
+                        pet->CastSpell(pet, MANA_LEECH, true);
+        }
+ 
+        void DamageTaken(Unit* /*killer*/, uint32& damage) override
+        {
+            if (me->IsSummon())
+                if (Unit* owner = me->ToTempSummon()->GetSummoner())
+                    if (owner->HasAura(GLYPH_OF_SHADOWFIEND) && damage >= me->GetHealth())
+                        owner->CastSpell(owner, GLYPH_OF_SHADOWFIEND_MANA, true);
+        }
+
+        void UpdateAI(uint32 /*diff*/) override
+        {
+            if (!UpdateVictim())
+                return;
+
+            DoMeleeAttackIfReady();
+        }
+    };
+
+    CreatureAI* GetAI(Creature* creature) const override
+    {
+        return new npc_shadowfiendAI(creature);
+    }
+};
+
 class npc_pet_pri_shadowfiend : public CreatureScript
 {
     public:
@@ -88,5 +139,6 @@ class npc_pet_pri_shadowfiend : public CreatureScript
 void AddSC_priest_pet_scripts()
 {
     new npc_pet_pri_lightwell();
-    new npc_pet_pri_shadowfiend();
+	new npc_shadowfiend();
+	new npc_pet_pri_shadowfiend();
 }

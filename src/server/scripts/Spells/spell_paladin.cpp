@@ -29,7 +29,7 @@
 
 enum PaladinSpells
 {
-    SPELL_PALADIN_AVENGERS_SHIELD               = 31935,
+    SPELL_PALADIN_AVENGERS_SHIELD                = 31935,
     SPELL_PALADIN_AURA_MASTERY_IMMUNE            = 64364,
     SPELL_PALADIN_BEACON_OF_LIGHT_MARKER         = 53563,
     SPELL_PALADIN_BEACON_OF_LIGHT_HEAL           = 53652,
@@ -43,11 +43,20 @@ enum PaladinSpells
     SPELL_PALADIN_DIVINE_STORM                   = 53385,
     SPELL_PALADIN_DIVINE_STORM_DUMMY             = 54171,
     SPELL_PALADIN_DIVINE_STORM_HEAL              = 54172,
+	
+	SPELL_PALADIN_AVENGER_S_SHIELD 				 = 31935,
+
     SPELL_PALADIN_EYE_FOR_AN_EYE_RANK_1          = 9799,
     SPELL_PALADIN_EYE_FOR_AN_EYE_DAMAGE          = 25997,
     SPELL_PALADIN_FORBEARANCE                    = 25771,
     SPELL_PALADIN_GLYPH_OF_SALVATION             = 63225,
     SPELL_PALADIN_HAND_OF_SACRIFICE              = 6940,
+
+	SPELL_PALADIN_SEAL_OF_RIGHTEOUSNESS          = 20154,
+	SPELL_PALADIN_SEAL_OF_JUSTICE                = 20164,
+	SPELL_PALADIN_SEAL_OF_INSIGHT                = 20165,
+	SPELL_PALADIN_JUDGEMENT_DAMAGE               = 54158,
+
     SPELL_PALADIN_HOLY_LIGHT                     = 635,
     SPELL_PALADIN_HOLY_SHOCK_R1                  = 20473,
     SPELL_PALADIN_HOLY_SHOCK_R1_DAMAGE           = 25912,
@@ -56,25 +65,44 @@ enum PaladinSpells
     SPELL_PALADIN_IMPROVED_CONCENTRACTION_AURA   = 63510,
     SPELL_PALADIN_IMPROVED_DEVOTION_AURA         = 63514,
     SPELL_PALADIN_ITEM_HEALING_TRANCE            = 37706,
-    SPELL_PALADIN_JUDGEMENT_DAMAGE               = 54158,
     SPELL_PALADIN_RIGHTEOUS_DEFENSE_TAUNT        = 31790,
     SPELL_PALADIN_SANCTIFIED_RETRIBUTION_AURA    = 63531,
     SPELL_PALADIN_SANCTIFIED_RETRIBUTION_R1      = 31869,
     SPELL_PALADIN_SANCTIFIED_WRATH               = 57318,
     SPELL_PALADIN_SANCTIFIED_WRATH_TALENT_R1     = 53375,
-    SPELL_PALADIN_SEAL_OF_RIGHTEOUSNESS          = 25742,
     SPELL_PALADIN_SWIFT_RETRIBUTION_R1           = 53379
 };
 
 enum MiscSpells
 {
     SPELL_GENERIC_ARENA_DAMPENING                = 74410,
-    SPELL_GENERIC_BATTLEGROUND_DAMPENING         = 74411
+    SPELL_GENERIC_BATTLEGROUND_DAMPENING         = 74411,
+
+	SPELL_PALADIN_RETRI_GUARDIAN                 = 86659,
+    SPELL_PALADIN_HOLY_GUARDIAN                  = 86669,
+    SPELL_PALADIN_PROT_GUARDIAN                  = 86698,
+
+	SPELL_PALADIN_CONSECRATION_SUMMON            = 82366,
+    SPELL_PALADIN_CONSECRATION_DAMAGE            = 81297,
+	
+	SPELL_JUDGEMENT_TRIGGER 					= 23590,
+	SPELL_JUDGEMENT_LONG_ARM_OF_LAWL 			= 87173,
+	SPELL_JUDGEMENT_WISE 						= 31930,
+	SPELL_JUDGEMENT_BOLD 						= 89906,
+	SPELL_JUDGEMENT_PURE 						= 53655,
+	SPELL_JUDGEMENT_ENLIGHTENED 				= 87188,
+
+	SPELL_LEARN_JUDGEMENT_CREDIT				= 44420,
 };
 
 enum PaladinSpellIcons
 {
     PALADIN_ICON_ID_RETRIBUTION_AURA             = 555
+};
+
+enum PaladinQuest
+{
+	QUEST_PALADIN_THE_POWER_OF_THE_LIGHT		= 24528,
 };
 
 /*
@@ -610,46 +638,6 @@ class spell_pal_eye_for_an_eye : public SpellScriptLoader
         }
 };
 
-// -75806 - Grand Crusader
-class spell_pal_grand_crusader : public SpellScriptLoader
-{
-    public:
-        spell_pal_grand_crusader() : SpellScriptLoader("spell_pal_grand_crusader") { }
-
-        class spell_pal_grand_crusader_AuraScript : public AuraScript
-        {
-            PrepareAuraScript(spell_pal_grand_crusader_AuraScript);
-
-            bool Validate(SpellInfo const* /*spellInfo*/) override
-            {
-                if (!sSpellMgr->GetSpellInfo(SPELL_PALADIN_AVENGERS_SHIELD))
-                    return false;
-                return true;
-            }
-
-            bool CheckProc(ProcEventInfo& /*eventInfo*/)
-            {
-                return GetTarget()->GetTypeId() == TYPEID_PLAYER;
-            }
-
-            void HandleEffectProc(AuraEffect const* /*aurEff*/, ProcEventInfo& /*eventInfo*/)
-            {
-                GetTarget()->ToPlayer()->RemoveSpellCooldown(SPELL_PALADIN_AVENGERS_SHIELD, true);
-            }
-
-            void Register() override
-            {
-                DoCheckProc += AuraCheckProcFn(spell_pal_grand_crusader_AuraScript::CheckProc);
-                OnEffectProc += AuraEffectProcFn(spell_pal_grand_crusader_AuraScript::HandleEffectProc, EFFECT_0, SPELL_AURA_PROC_TRIGGER_SPELL);
-            }
-        };
-
-        AuraScript* GetAuraScript() const override
-        {
-            return new spell_pal_grand_crusader_AuraScript();
-        }
-};
-
 // 54968 - Glyph of Holy Light
 class spell_pal_glyph_of_holy_light : public SpellScriptLoader
 {
@@ -876,6 +864,7 @@ class spell_pal_item_healing_discount : public SpellScriptLoader
         }
 };
 
+
 // 20271 - Judgement
 /// Updated 4.3.4
 class spell_pal_judgement : public SpellScriptLoader
@@ -1078,16 +1067,638 @@ class spell_pal_sacred_shield : public SpellScriptLoader
         }
 };
 
-// 85256 - Templar's Verdict
+
 /// Updated 4.3.4
-class spell_pal_templar_s_verdict : public SpellScriptLoader
+class spell_pal_judgements: public SpellScriptLoader
+{
+public:
+    spell_pal_judgements () :
+            SpellScriptLoader("spell_pal_judgements")
+    {
+    }
+    class spell_pal_judgements_SpellScript: public SpellScript
+    {
+        PrepareSpellScript(spell_pal_judgements_SpellScript)
+        ;
+        SpellCastResult CheckCast ()
+        {
+            Unit* caster = GetCaster();
+            if (caster->GetTypeId() != TYPEID_PLAYER)
+                return SPELL_FAILED_DONT_REPORT;
+            if (Unit* target = GetExplTargetUnit())
+            {
+                if (!target->IsFriendlyTo(caster) || target->getAttackers().empty())
+                    return SPELL_FAILED_BAD_TARGETS;
+            }
+            else
+                return SPELL_FAILED_BAD_TARGETS;
+            return SPELL_CAST_OK;
+        }
+        void HandleDummy (SpellEffIndex effIndex)
+        {
+            PreventHitDefaultEffect(effIndex);
+            Unit* caster = GetCaster();
+            if (Unit* target = GetHitUnit())
+            {
+                caster->CastSpell(target, SPELL_JUDGEMENT_TRIGGER, true);
+                int32 regen = 0;
+                if (caster->HasAura(89901))          // Jugements of the bold
+                {
+                    regen = int32(caster->GetCreateMana() * 0.025);
+                    caster->CastCustomSpell(caster, SPELL_JUDGEMENT_BOLD, &regen, 0, 0, true);
+                }
+                if (caster->HasAura(31878))          // Judgements of the Wise
+                {
+                    regen = int32(caster->GetCreateMana() * 0.030);
+                    caster->CastCustomSpell(caster, SPELL_JUDGEMENT_WISE, &regen, 0, 0, true);
+                }
+                if (caster->HasAura(87168))          // Long arm of Lawl Rank 1
+                {
+                    if (roll_chance_i(50.0f))
+                        if (caster->GetDistance(target) > 15.0f || !caster->IsWithinDistInMap(target, 15.0f))
+                            caster->CastSpell(caster, SPELL_JUDGEMENT_LONG_ARM_OF_LAWL, true);
+                }
+                else if (caster->HasAura(87172))          // Long arm of Lawl Rank 2
+                {
+                    if (caster->GetDistance(target) > 15.0f || !caster->IsWithinDistInMap(target, 15.0f))
+                        caster->CastSpell(caster, SPELL_JUDGEMENT_LONG_ARM_OF_LAWL, true);
+                }
+                if (caster->HasAura(53671))          // Judgements of the Pure
+                    caster->CastSpell(caster, SPELL_JUDGEMENT_PURE, true);
+                if (caster->HasAura(53673))
+                    caster->CastSpell(caster, SPELL_JUDGEMENT_PURE + 1, true);
+                if (caster->HasAura(54151))
+                    caster->CastSpell(caster, SPELL_JUDGEMENT_PURE + 2, true);
+                if (caster->HasAura(53556))          // Enlightened Judgements
+                    caster->CastSpell(caster, SPELL_JUDGEMENT_ENLIGHTENED, true);
+                if (caster->HasAura(53557))
+                    caster->CastSpell(caster, SPELL_JUDGEMENT_ENLIGHTENED + 1, true);				
+            }
+        }
+
+        void Register () override
+        {
+            OnEffectHitTarget += SpellEffectFn(spell_pal_judgements_SpellScript::HandleDummy, EFFECT_0, SPELL_EFFECT_DUMMY);
+        }
+    };
+    SpellScript* GetSpellScript () const override
+    {
+        return new spell_pal_judgements_SpellScript();
+    }
+};
+
+class spell_pal_guardian_ancient_kings : public SpellScriptLoader
+{
+public:
+    spell_pal_guardian_ancient_kings() : SpellScriptLoader("spell_pal_guardian_ancient_kings") { }
+
+    class spell_pal_guardian_ancient_kings_SpellScript : public SpellScript
+    {
+		PrepareSpellScript(spell_pal_guardian_ancient_kings_SpellScript);
+
+        bool Load() override
+        {
+            if (GetCaster()->GetTypeId() != TYPEID_PLAYER)
+                return false;
+            return true;
+        }
+
+        bool Validate (SpellInfo const* /*spellEntry*/) override
+        {
+            if (!sSpellMgr->GetSpellInfo(SPELL_PALADIN_HOLY_GUARDIAN) ||
+                !sSpellMgr->GetSpellInfo(SPELL_PALADIN_RETRI_GUARDIAN) ||
+                !sSpellMgr->GetSpellInfo(SPELL_PALADIN_PROT_GUARDIAN))
+                return false;
+            return true;
+        }
+
+        void HandleDummy(SpellEffIndex /*effIndex*/)
+        {
+            if (Unit* caster = GetCaster())
+            {
+                if (caster->ToPlayer()->HasSpell(20473)) // Holy Shock
+                {
+                    caster->CastSpell(caster, SPELL_PALADIN_HOLY_GUARDIAN, false);
+                    return;
+                }
+                if (caster->ToPlayer()->HasSpell(85256)) // Templar's Verdict
+                {
+                    caster->CastSpell(caster, SPELL_PALADIN_RETRI_GUARDIAN, false);
+                    return;
+                }
+                if (caster->ToPlayer()->HasSpell(31935)) // Avenger's shield
+                {
+                    caster->CastSpell(caster, SPELL_PALADIN_PROT_GUARDIAN, false);
+                    return;
+                }
+            }
+        }
+
+        void Register()
+        {
+            OnEffectLaunch += SpellEffectFn(spell_pal_guardian_ancient_kings_SpellScript::HandleDummy, EFFECT_0, SPELL_EFFECT_DUMMY);
+        }
+    };
+
+    SpellScript* GetSpellScript() const override
+    {
+        return new spell_pal_guardian_ancient_kings_SpellScript();
+    }
+};
+
+class spell_pal_consecration : public SpellScriptLoader
+{
+public:
+    spell_pal_consecration() : SpellScriptLoader("spell_pal_consecration") { }
+
+    class spell_pal_consecration_AuraScript : public AuraScript
+    {
+		PrepareAuraScript(spell_pal_consecration_AuraScript);
+        
+        float x, y, z;
+
+        bool Load() override
+        {
+           if (GetCaster()->GetTypeId() != TYPEID_PLAYER)
+               return false;
+
+            return true;
+         }
+
+        bool Validate (SpellInfo const* /*SpellInfo*/) override
+        {
+            if (!sSpellMgr->GetSpellInfo(SPELL_PALADIN_CONSECRATION_DAMAGE) ||
+                !sSpellMgr->GetSpellInfo(SPELL_PALADIN_CONSECRATION_SUMMON))
+                return false;
+
+            return true;
+        }
+
+        void HandlePeriodicDummy(AuraEffect const* /*aurEff*/)
+        {
+            uint64 consecrationNpcGUID = GetCaster()->m_SummonSlot[1];
+
+            if (!consecrationNpcGUID)
+               return;
+
+            Unit* consecrationNpc = ObjectAccessor::GetCreature(*GetCaster(),consecrationNpcGUID);
+
+            if (!consecrationNpc)
+                return;
+
+            consecrationNpc->GetPosition(x,y,z);
+            consecrationNpc->CastSpell(x,y,z,SPELL_PALADIN_CONSECRATION_DAMAGE,true,NULL,NULL,GetCaster()->GetGUID());  
+        }
+
+        void Register() override
+        {
+            OnEffectPeriodic += AuraEffectPeriodicFn(spell_pal_consecration_AuraScript::HandlePeriodicDummy,EFFECT_1,SPELL_AURA_PERIODIC_DUMMY);
+        }
+    };
+
+    AuraScript* GetAuraScript() const
+    {
+        return new spell_pal_consecration_AuraScript();
+    }
+};
+
+// Selfes healer
+class spell_pal_selfless_healer : public SpellScriptLoader
+{
+public:
+    spell_pal_selfless_healer() : SpellScriptLoader("spell_pal_selfless_healer") { }
+	class spell_pal_selfless_healer_SpellScript : public SpellScript
+	{
+		PrepareSpellScript(spell_pal_selfless_healer_SpellScript);
+
+		uint8 holyStack;
+
+		bool Load() override
+		{
+			if (GetCaster()->GetTypeId() != TYPEID_PLAYER)
+				return false;
+			holyStack = 0;
+			return GetCaster()->GetAuraEffect(SPELL_AURA_DUMMY, SPELLFAMILY_PALADIN, 3924, 0);
+		}
+		
+        void HandleBeforeCast()
+        {
+			if (Unit* caster = GetCaster())
+				holyStack = caster->GetPower(POWER_HOLY_POWER);
+        }
+
+        void HandleAfterHit()
+        {
+			if (Unit* caster = GetCaster())
+            {
+				int32 baseAmount = 0;
+				int32 amount = 0;
+				if (AuraEffect const* pAurEff = caster->GetAuraEffect(SPELL_AURA_DUMMY, SPELLFAMILY_PALADIN, 3924, 1))
+					baseAmount = pAurEff->GetAmount();
+				if (caster->HasAura(SPELL_PALADIN_DIVINE_PURPOSE_PROC))
+					amount = baseAmount * 3;
+				else
+					amount = baseAmount * holyStack;
+				if (amount != 0)
+					caster->CastCustomSpell(caster, 90811, &amount, NULL, NULL, true);
+            }
+        }
+
+        void Register()
+        {
+			BeforeCast += SpellCastFn(spell_pal_selfless_healer_SpellScript::HandleBeforeCast);
+			AfterHit += SpellHitFn(spell_pal_selfless_healer_SpellScript::HandleAfterHit);
+        }
+    };
+    
+	SpellScript* GetSpellScript() const override
+    {
+        return new spell_pal_selfless_healer_SpellScript();
+    }
+};
+
+// 53600 - Shield of the Righteous
+/// Updated 4.3.4
+class spell_pal_shield_of_the_righteous : public SpellScriptLoader
 {
     public:
-        spell_pal_templar_s_verdict() : SpellScriptLoader("spell_pal_templar_s_verdict") { }
+        spell_pal_shield_of_the_righteous() : SpellScriptLoader("spell_pal_shield_of_the_righteous") { }
 
-        class spell_pal_templar_s_verdict_SpellScript : public SpellScript
+        class spell_pal_shield_of_the_righteous_SpellScript : public SpellScript
         {
-            PrepareSpellScript(spell_pal_templar_s_verdict_SpellScript);
+            PrepareSpellScript(spell_pal_shield_of_the_righteous_SpellScript);
+
+            bool Load() override
+            {
+                if (GetCaster()->GetTypeId() != TYPEID_PLAYER)
+                    return false;
+
+                if (GetCaster()->ToPlayer()->getClass() != CLASS_PALADIN)
+                    return false;
+
+                return true;
+            }
+
+            void ChangeDamage(SpellEffIndex /*effIndex*/)
+            {
+                int32 damage = GetHitDamage();
+                int32 power = GetCaster()->GetPower(POWER_HOLY_POWER);
+
+                // 1 HolyPower: damage - 1
+                // 2 HolyPower: (damage * 3) - 3 
+                // 3 HolyPower: (damage * 6) - 6
+                switch (power)
+                {
+                    case 0: // 1 Holy Power
+                        damage = int32(damage - 1.0f);
+                        break;
+                    case 1: // 2 Holy Power
+                        damage = int32((damage * 3.0f) - 3.0f);
+                        break;
+                    case 2: // 3 Holy Power
+                        damage = int32((damage * 6.0f) - 6.0f);
+                        break;
+                }
+
+                SetHitDamage(damage);
+            }
+
+            void Register()
+            {
+                OnEffectHitTarget += SpellEffectFn(spell_pal_shield_of_the_righteous_SpellScript::ChangeDamage, EFFECT_0, SPELL_EFFECT_SCHOOL_DAMAGE);
+            }
+        };
+
+        SpellScript* GetSpellScript() const override
+        {
+            return new spell_pal_shield_of_the_righteous_SpellScript();
+        }
+};
+
+class spell_pal_judgements_of_the_wise : public SpellScriptLoader
+{
+    public:
+        spell_pal_judgements_of_the_wise() : SpellScriptLoader("spell_pal_judgements_of_the_wise") { }
+
+        class spell_pal_judgements_of_the_wise_AuraScript : public AuraScript
+        {
+            PrepareAuraScript(spell_pal_judgements_of_the_wise_AuraScript);
+
+            void CalculateMana(AuraEffect const* /*aurEff*/, int32& amount, bool& canBeRecalculated)
+            {
+                if (Unit* caster = GetCaster())
+                {
+                    canBeRecalculated = true;
+                    int32 basemana = caster->ToPlayer()->GetCreateMana();
+                    amount = (3 * basemana) / 100;
+                }
+            }
+
+            void Register() override
+            {
+                DoEffectCalcAmount += AuraEffectCalcAmountFn(spell_pal_judgements_of_the_wise_AuraScript::CalculateMana, EFFECT_0, SPELL_AURA_PERIODIC_ENERGIZE);
+            }
+        };
+
+        AuraScript* GetAuraScript() const override
+        {
+            return new spell_pal_judgements_of_the_wise_AuraScript();
+        }
+};
+
+class spell_pal_judgements_of_the_bold : public SpellScriptLoader
+{
+public:
+    spell_pal_judgements_of_the_bold() : SpellScriptLoader("spell_pal_judgements_of_the_bold") { }
+
+    class spell_pal_judgements_of_the_bold_AuraScript : public AuraScript
+    {
+        PrepareAuraScript(spell_pal_judgements_of_the_bold_AuraScript);
+
+        bool Load() override
+        {
+            if (GetCaster()->GetTypeId() != TYPEID_PLAYER)
+                return false;
+            return true;
+        }
+
+        void CalculateMana(AuraEffect const* /*aurEff*/, int32& amount, bool& canBeRecalculated)
+        {
+            if (Unit* caster = GetCaster())
+            {
+                canBeRecalculated = true;
+                int32 basemana = caster->ToPlayer()->GetCreateMana();
+                amount = (amount * basemana) / 1000;
+            }
+        }
+
+        void Register()
+        {
+            DoEffectCalcAmount += AuraEffectCalcAmountFn(spell_pal_judgements_of_the_bold_AuraScript::CalculateMana, EFFECT_0, SPELL_AURA_PERIODIC_ENERGIZE);
+        }
+    };
+
+    AuraScript* GetAuraScript() const
+    {
+        return new spell_pal_judgements_of_the_bold_AuraScript();
+    }
+};
+
+// -75806 - Grand Crusader
+class spell_pal_grand_crusader : public SpellScriptLoader
+{
+    public:
+        spell_pal_grand_crusader() : SpellScriptLoader("spell_pal_grand_crusader") { }
+
+        class spell_pal_grand_crusader_AuraScript : public AuraScript
+        {
+            PrepareAuraScript(spell_pal_grand_crusader_AuraScript);
+
+            bool Validate(SpellInfo const* /*spellInfo*/) override
+            {
+                if (!sSpellMgr->GetSpellInfo(SPELL_PALADIN_AVENGERS_SHIELD))
+                    return false;
+                return true;
+            }
+
+            bool CheckProc(ProcEventInfo& /*eventInfo*/)
+            {
+                return GetTarget()->GetTypeId() == TYPEID_PLAYER;
+            }
+
+            void HandleEffectProc(AuraEffect const* /*aurEff*/, ProcEventInfo& /*eventInfo*/)
+            {
+                GetTarget()->ToPlayer()->RemoveSpellCooldown(SPELL_PALADIN_AVENGERS_SHIELD, true);
+            }
+
+            void Register() override
+            {
+                DoCheckProc += AuraCheckProcFn(spell_pal_grand_crusader_AuraScript::CheckProc);
+                OnEffectProc += AuraEffectProcFn(spell_pal_grand_crusader_AuraScript::HandleEffectProc, EFFECT_0, SPELL_AURA_PROC_TRIGGER_SPELL);
+            }
+        };
+
+        AuraScript* GetAuraScript() const override
+        {
+            return new spell_pal_grand_crusader_AuraScript();
+        }
+};
+
+class spell_pal_zealotry : public SpellScriptLoader
+{
+    public:
+        spell_pal_zealotry() : SpellScriptLoader("spell_pal_zealotry") { }
+
+        class spell_pal_zealotry_SpellScript : public SpellScript
+        {
+            PrepareSpellScript(spell_pal_zealotry_SpellScript);
+
+            void HandleAfterCast()
+            {
+                if (Unit* caster = GetCaster())
+                    caster->SetPower(POWER_HOLY_POWER,3);
+            }
+
+            void Register()
+            {
+                AfterCast += SpellCastFn(spell_pal_zealotry_SpellScript::HandleAfterCast);
+            }
+        };
+
+        SpellScript* GetSpellScript() const override
+        {
+            return new spell_pal_zealotry_SpellScript();
+        }
+};
+
+
+class spell_pal_acts_of_sacrifice : public SpellScriptLoader
+{
+    public:
+        spell_pal_acts_of_sacrifice() : SpellScriptLoader("spell_pal_acts_of_sacrifice") { }
+
+        class spell_pal_acts_of_sacrifice_SpellScript : public SpellScript
+        {
+            PrepareSpellScript(spell_pal_acts_of_sacrifice_SpellScript);
+
+            void HandleHitTarget(SpellEffIndex /*effIndex*/)
+            {
+                if (Unit* caster = GetCaster())
+                    if (Unit* target = GetHitUnit())
+                        if (caster->HasAura(85446) || caster->HasAura(85795))
+                             if (target->GetGUID() == caster->GetGUID())
+                                caster->RemoveAurasWithMechanic((1<<MECHANIC_SNARE)|(1<<MECHANIC_ROOT), AURA_REMOVE_BY_DEFAULT, NULL);
+            }
+
+            void Register()
+            {
+                 OnEffectHitTarget += SpellEffectFn(spell_pal_acts_of_sacrifice_SpellScript::HandleHitTarget, EFFECT_0, SPELL_EFFECT_DISPEL);
+            }
+        };
+
+        SpellScript* GetSpellScript() const override
+        {
+            return new spell_pal_acts_of_sacrifice_SpellScript();
+        }
+};
+
+class spell_pal_word_of_glory : public SpellScriptLoader
+{
+public:
+    spell_pal_word_of_glory() : SpellScriptLoader("spell_pal_word_of_glory") { }
+
+    class spell_pal_word_of_glory_heal_SpellScript : public SpellScript
+    {
+		PrepareSpellScript(spell_pal_word_of_glory_heal_SpellScript);
+
+        int32 totalheal;
+		int32 holyStack;
+
+        bool Load() override
+        {
+            if (GetCaster()->GetTypeId() != TYPEID_PLAYER)
+                return false;
+
+	    holyStack = 0;
+
+            return true;
+        }
+
+        void HandleBeforeCast()
+        {
+            if (Unit* caster = GetCaster())
+                holyStack = caster->GetPower(POWER_HOLY_POWER);
+        }
+
+        void ChangeHeal(SpellEffIndex /*effIndex*/)
+        {
+            Unit* caster = GetCaster();
+            Unit* target = GetHitUnit();
+
+            int32 ap = caster->GetTotalAttackPowerValue(BASE_ATTACK) * 0.198;
+            int32 hp = caster->HasAura(SPELL_PALADIN_DIVINE_PURPOSE_PROC) ? 3 : caster->GetPower(POWER_HOLY_POWER) + 1;
+
+            if (!target)
+                return;
+
+            // ((Heal/2)+0.198*AP) * HolyPower
+            totalheal = ((GetHitHeal() / 2) + ap) * hp;
+	    
+            if (caster->HasAura(54936)) // Glyph of Word of Glory
+                totalheal = AddPct(totalheal, 10);
+				
+            SetHitHeal(totalheal);
+        }
+
+        void HandleAfterCast()
+        {
+            // Eternal Glory
+            if (Unit* caster = GetCaster())
+                if (AuraEffect const* pAurEff = caster->GetAuraEffect(SPELL_AURA_DUMMY, SPELLFAMILY_PALADIN, 2944, 0))
+                    if (roll_chance_i(pAurEff->GetAmount()))
+                        caster->CastCustomSpell(caster, 88676, &holyStack, NULL, NULL, true);
+	}
+		
+        void HandlePeriodic()
+        {
+            // Glyph of Long Word
+            if (!GetCaster()->HasAura(93466))
+                PreventHitAura();
+        }
+
+        void Register() override
+        {
+            BeforeCast += SpellCastFn(spell_pal_word_of_glory_heal_SpellScript::HandleBeforeCast);
+            OnEffectHitTarget += SpellEffectFn(spell_pal_word_of_glory_heal_SpellScript::ChangeHeal, EFFECT_0, SPELL_EFFECT_HEAL);
+            AfterHit += SpellHitFn(spell_pal_word_of_glory_heal_SpellScript::HandlePeriodic);
+            AfterCast += SpellCastFn(spell_pal_word_of_glory_heal_SpellScript::HandleAfterCast);
+        }
+    };
+
+    class spell_pal_word_of_glory_heal_AuraScript : public AuraScript
+    {
+		PrepareAuraScript(spell_pal_word_of_glory_heal_AuraScript);
+
+        bool Load() override
+        {
+            if (GetCaster()->GetTypeId() != TYPEID_PLAYER)
+                return false;
+            return true;
+        }
+
+        void CalculateOvertime(AuraEffect const* aurEff, int32& amount, bool& canBeRecalculated)
+        {
+            if (AuraEffect const* longWord = GetCaster()->GetDummyAuraEffect(SPELLFAMILY_PALADIN, 4127, 1))
+            {
+                canBeRecalculated = true;
+                amount = ((GetSpellInfo()->Effects[EFFECT_0].CalcValue() * longWord->GetAmount()) / 100) / 3;
+            }
+        }
+
+        void Register() override
+        {
+            DoEffectCalcAmount += AuraEffectCalcAmountFn(spell_pal_word_of_glory_heal_AuraScript::CalculateOvertime, EFFECT_1, SPELL_AURA_PERIODIC_HEAL);
+        }
+    };
+
+    AuraScript* GetAuraScript() const override
+    {
+        return new spell_pal_word_of_glory_heal_AuraScript();
+    }
+
+    SpellScript* GetSpellScript() const override
+    {
+        return new spell_pal_word_of_glory_heal_SpellScript();
+    }
+};
+
+class spell_pal_seal_of_righteousness : public SpellScriptLoader
+{
+    public:
+        spell_pal_seal_of_righteousness() : SpellScriptLoader("spell_pal_seal_of_righteousness") { }
+
+        class spell_pal_seal_of_righteousness_SpellScript : public SpellScript
+        {
+            PrepareSpellScript(spell_pal_seal_of_righteousness_SpellScript);
+			
+			void HandleBeforeCast()
+            {
+				Unit* caster = GetCaster();				
+				if (caster->GetTypeId() == TYPEID_PLAYER)
+                {
+					Player* player = caster->ToPlayer();
+					if (player)
+					{
+						if (player->GetQuestStatus(QUEST_PALADIN_THE_POWER_OF_THE_LIGHT) == QUEST_STATUS_INCOMPLETE)
+						{  
+							player->KilledMonsterCredit(SPELL_LEARN_JUDGEMENT_CREDIT, NULL);	
+						}
+					}					
+				}				
+			}
+
+            void Register() override
+            {                 
+				 BeforeCast += SpellCastFn(spell_pal_seal_of_righteousness_SpellScript::HandleBeforeCast);
+            }
+        };
+
+        SpellScript* GetSpellScript() const override
+        {
+            return new spell_pal_seal_of_righteousness_SpellScript();
+        }
+};
+
+// 85256 - Templar's Verdict
+/// Updated 4.3.4
+class spell_pal_templar_verdict : public SpellScriptLoader
+{
+    public:
+        spell_pal_templar_verdict() : SpellScriptLoader("spell_pal_templar_verdict") { }
+
+        class spell_pal_templar_verdict_SpellScript : public SpellScript
+        {
+            PrepareSpellScript(spell_pal_templar_verdict_SpellScript);
 
             bool Validate (SpellInfo const* /*spellEntry*/)
             {
@@ -1136,59 +1747,13 @@ class spell_pal_templar_s_verdict : public SpellScriptLoader
 
             void Register() override
             {
-                OnEffectHitTarget += SpellEffectFn(spell_pal_templar_s_verdict_SpellScript::ChangeDamage, EFFECT_0, SPELL_EFFECT_WEAPON_PERCENT_DAMAGE);
+                OnEffectHitTarget += SpellEffectFn(spell_pal_templar_verdict_SpellScript::ChangeDamage, EFFECT_0, SPELL_EFFECT_WEAPON_PERCENT_DAMAGE);
             }
         };
 
         SpellScript* GetSpellScript() const override
         {
-            return new spell_pal_templar_s_verdict_SpellScript();
-        }
-};
-
-// 20154, 21084 - Seal of Righteousness - melee proc dummy (addition ${$MWS*(0.022*$AP+0.044*$SPH)} damage)
-class spell_pal_seal_of_righteousness : public SpellScriptLoader
-{
-    public:
-        spell_pal_seal_of_righteousness() : SpellScriptLoader("spell_pal_seal_of_righteousness") { }
-
-        class spell_pal_seal_of_righteousness_AuraScript : public AuraScript
-        {
-            PrepareAuraScript(spell_pal_seal_of_righteousness_AuraScript);
-
-            bool Validate(SpellInfo const* /*spellInfo*/) override
-            {
-                if (!sSpellMgr->GetSpellInfo(SPELL_PALADIN_SEAL_OF_RIGHTEOUSNESS))
-                    return false;
-                return true;
-            }
-
-            bool CheckProc(ProcEventInfo& eventInfo)
-            {
-                return eventInfo.GetProcTarget();
-            }
-
-            void HandleProc(AuraEffect const* aurEff, ProcEventInfo& eventInfo)
-            {
-                PreventDefaultAction();
-
-                float ap = GetTarget()->GetTotalAttackPowerValue(BASE_ATTACK);
-                int32 holy = GetTarget()->SpellBaseDamageBonusDone(SPELL_SCHOOL_MASK_HOLY);
-                holy += eventInfo.GetProcTarget()->SpellBaseDamageBonusTaken(SPELL_SCHOOL_MASK_HOLY);
-                int32 bp = int32((ap * 0.022f + 0.044f * holy) * GetTarget()->GetAttackTime(BASE_ATTACK) / 1000);
-                GetTarget()->CastCustomSpell(SPELL_PALADIN_SEAL_OF_RIGHTEOUSNESS, SPELLVALUE_BASE_POINT0, bp, eventInfo.GetProcTarget(), true, NULL, aurEff);
-            }
-
-            void Register() override
-            {
-                DoCheckProc += AuraCheckProcFn(spell_pal_seal_of_righteousness_AuraScript::CheckProc);
-                OnEffectProc += AuraEffectProcFn(spell_pal_seal_of_righteousness_AuraScript::HandleProc, EFFECT_0, SPELL_AURA_DUMMY);
-            }
-        };
-
-        AuraScript* GetAuraScript() const override
-        {
-            return new spell_pal_seal_of_righteousness_AuraScript();
+            return new spell_pal_templar_verdict_SpellScript();
         }
 };
 
@@ -1206,7 +1771,6 @@ void AddSC_paladin_spell_scripts()
     new spell_pal_divine_storm_dummy();
     new spell_pal_exorcism_and_holy_wrath_damage();
     new spell_pal_eye_for_an_eye();
-    new spell_pal_glyph_of_holy_light();
     new spell_pal_grand_crusader();
     new spell_pal_hand_of_sacrifice();
     new spell_pal_holy_shock();
@@ -1214,10 +1778,20 @@ void AddSC_paladin_spell_scripts()
     new spell_pal_improved_aura_effect("spell_pal_improved_devotion_aura_effect");
     new spell_pal_improved_aura_effect("spell_pal_sanctified_retribution_effect");
     new spell_pal_item_healing_discount();
-    new spell_pal_judgement();
     new spell_pal_lay_on_hands();
     new spell_pal_righteous_defense();
     new spell_pal_sacred_shield();
-    new spell_pal_templar_s_verdict();
-    new spell_pal_seal_of_righteousness();
+	new spell_pal_judgements();
+	new spell_pal_guardian_ancient_kings();
+	new spell_pal_consecration();
+	new spell_pal_selfless_healer();
+	new spell_pal_shield_of_the_righteous();
+	new spell_pal_judgements_of_the_bold();
+	new spell_pal_judgements_of_the_wise();
+	new spell_pal_zealotry();
+	new spell_pal_acts_of_sacrifice();
+	new spell_pal_word_of_glory();
+	new spell_pal_seal_of_righteousness();
+	new spell_pal_glyph_of_holy_light();
+	new spell_pal_templar_verdict();
 }

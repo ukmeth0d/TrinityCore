@@ -43,9 +43,9 @@ enum WarlockSpells
     SPELL_WARLOCK_DEMONIC_EMPOWERMENT_VOIDWALKER    = 54443,
     SPELL_WARLOCK_DEMON_SOUL_IMP                    = 79459,
     SPELL_WARLOCK_DEMON_SOUL_FELHUNTER              = 79460,
-    SPELL_WARLOCK_DEMON_SOUL_FELGUARD               = 79452,
-    SPELL_WARLOCK_DEMON_SOUL_SUCCUBUS               = 79453,
-    SPELL_WARLOCK_DEMON_SOUL_VOIDWALKER             = 79454,
+    SPELL_WARLOCK_DEMON_SOUL_FELGUARD               = 79462,
+    SPELL_WARLOCK_DEMON_SOUL_SUCCUBUS               = 79463,
+    SPELL_WARLOCK_DEMON_SOUL_VOIDWALKER             = 79464,
     SPELL_WARLOCK_FEL_SYNERGY_HEAL                  = 54181,
     SPELL_WARLOCK_GLYPH_OF_SHADOWFLAME              = 63311,
     SPELL_WARLOCK_GLYPH_OF_SIPHON_LIFE              = 63106,
@@ -74,7 +74,9 @@ enum WarlockSpells
     SPELL_WARLOCK_SOUL_SWAP_MOD_COST                = 92794,
     SPELL_WARLOCK_SOUL_SWAP_DOT_MARKER              = 92795,
     SPELL_WARLOCK_UNSTABLE_AFFLICTION               = 30108,
-    SPELL_WARLOCK_UNSTABLE_AFFLICTION_DISPEL        = 31117
+	SPELL_WARLOCK_DRAIN_LIFE                      	= 89653,
+    SPELL_WARLOCK_UNSTABLE_AFFLICTION_DISPEL        = 31117,
+	SPELL_IMMOLATE									= 118297,
 };
 
 enum WarlockSpellIcons
@@ -1432,6 +1434,37 @@ class spell_warl_unstable_affliction : public SpellScriptLoader
         }
 };
 
+class spell_warl_drain_life : public SpellScriptLoader
+{
+public:
+	spell_warl_drain_life() : SpellScriptLoader("spell_warl_drain_life") { }
+
+	class spell_warl_drain_life_AuraScript : public AuraScript
+	{
+		PrepareAuraScript(spell_warl_drain_life_AuraScript);
+
+		void OnPeriodic(AuraEffect const* /*aurEff*/)
+		{
+			int32 getPctHealth = 2; // 2% Restore
+			// Check for Death's Embrace
+			if(AuraEffect const* aurEff = GetCaster()->GetAuraEffect(SPELL_AURA_DUMMY, SPELLFAMILY_WARLOCK, 3223, 0))
+				if(GetCaster()->HealthBelowPct(25))
+					getPctHealth += int32(aurEff->GetAmount());
+			GetCaster()->CastCustomSpell(GetCaster(), SPELL_WARLOCK_DRAIN_LIFE, &getPctHealth, NULL, NULL, true);
+		}
+
+		void Register()
+		{
+			OnEffectPeriodic += AuraEffectPeriodicFn(spell_warl_drain_life_AuraScript::OnPeriodic, EFFECT_0, SPELL_AURA_PERIODIC_DAMAGE);
+		}
+	};
+
+	AuraScript* GetAuraScript() const
+	{
+		return new spell_warl_drain_life_AuraScript();
+	}
+};
+
 void AddSC_warlock_spell_scripts()
 {
     new spell_warl_aftermath();
@@ -1464,4 +1497,5 @@ void AddSC_warlock_spell_scripts()
     new spell_warl_soul_swap_override();
     new spell_warl_soulshatter();
     new spell_warl_unstable_affliction();
+	new spell_warl_drain_life();	
 }

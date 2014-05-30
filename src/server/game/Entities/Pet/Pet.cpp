@@ -1,5 +1,9 @@
 /*
+ *
+ * Copyright (C) 2011-2014 ArkCORE <http://www.arkania.net/>
+ *
  * Copyright (C) 2008-2014 TrinityCore <http://www.trinitycore.org/>
+ *
  * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -444,6 +448,9 @@ void Pet::SavePetToDB(PetSaveMode mode)
             trans->Append(stmt);
         }
 
+		// HACK Remove duplicate ghouls (dks can only have 1 ghoul at the same time)
+        trans->PAppend("DELETE FROM character_pet WHERE owner = '%u' AND `owner` IN (SELECT `guid` FROM `characters` WHERE `class`=6);", owner);
+		
         // save pet
         std::ostringstream ss;
         ss  << "INSERT INTO character_pet (id, entry,  owner, modelid, level, exp, Reactstate, slot, name, renamed, curhealth, curmana, abdata, savetime, CreatedBySpell, PetType) "
@@ -801,8 +808,9 @@ bool Guardian::InitStatsForLevel(uint8 petlevel)
     if (IsPet() && GetOwner()->GetTypeId() == TYPEID_PLAYER)
     {
         if (GetOwner()->getClass() == CLASS_WARLOCK
-            || GetOwner()->getClass() == CLASS_SHAMAN        // Fire Elemental
-            || GetOwner()->getClass() == CLASS_DEATH_KNIGHT) // Risen Ghoul
+                || GetOwner()->getClass() == CLASS_SHAMAN        // Fire Elemental
+				|| GetOwner()->getClass() == CLASS_PRIEST        // Shadowfiend
+                || GetOwner()->getClass() == CLASS_DEATH_KNIGHT) // Risen Ghoul
         {
             petType = SUMMON_PET;
         }
@@ -907,6 +915,7 @@ bool Guardian::InitStatsForLevel(uint8 petlevel)
             //damage range is then petlevel / 2
             SetBaseWeaponDamage(BASE_ATTACK, MAXDAMAGE, float(petlevel + (petlevel / 4)));
             //damage is increased afterwards as strength and pet scaling modify attack power
+			SetModifierValue(UNIT_MOD_ARMOR, BASE_VALUE, float(m_owner->GetArmor()) * 0.7f); //  Bonus Armor (70% of player armor)
             break;
         }
         default:
@@ -916,8 +925,14 @@ bool Guardian::InitStatsForLevel(uint8 petlevel)
                 case 510: // mage Water Elemental
                 {
                     SetBonusDamage(int32(GetOwner()->SpellBaseDamageBonusDone(SPELL_SCHOOL_MASK_FROST) * 0.33f));
+					SetCreateHealth(GetOwner()->GetMaxHealth() * 0.5f);
                     break;
                 }
+                case 10467: // Mana Tide Totem
+                {
+                    SetCreateHealth(GetOwner()->GetMaxHealth() * 0.1f);
+                    break;
+                }				
                 case 1964: //force of nature
                 {
                     if (!pInfo)
@@ -1051,16 +1066,16 @@ bool Pet::HaveInDiet(ItemTemplate const* item) const
 
 uint32 Pet::GetCurrentFoodBenefitLevel(uint32 itemlevel) const
 {
-    // -5 or greater food level
-    if (getLevel() <= itemlevel + 5)                         //possible to feed level 60 pet with level 55 level food for full effect
-        return 35000;
-    // -10..-6
-    else if (getLevel() <= itemlevel + 10)                   //pure guess, but sounds good
-        return 17000;
-    // -14..-11
-    else if (getLevel() <= itemlevel + 14)                   //level 55 food gets green on 70, makes sense to me
-        return 8000;
-    // -15 or less
+    // -10 or greater food level
+    if (getLevel() <= itemlevel + 10)                         // possible to feed level 85 pet with ilevel 75 level food for full effect
+        return 50;
+    // -10 to -20
+    else if (getLevel() <= itemlevel + 20)
+        return 25;
+    // -20 to -30
+    else if (getLevel() <= itemlevel + 30)
+        return 13;
+    // -30 or more difference
     else
         return 0;                                           //food too low level
 }

@@ -1,5 +1,9 @@
 /*
+ *
+ * Copyright (C) 2011-2014 ArkCORE <http://www.arkania.net/>
+ *
  * Copyright (C) 2008-2014 TrinityCore <http://www.trinitycore.org/>
+ *
  * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -107,6 +111,10 @@ DiminishingGroup GetDiminishingReturnsGroupForSpell(SpellInfo const* spellproto,
             // Dragon's Breath
             else if (spellproto->SpellFamilyFlags[0] & 0x800000)
                 return DIMINISHING_DRAGONS_BREATH;
+            // Ring of Frost "Freeze Effect" according to WoWWiki is categorized under "Disorient"
+            // Placed it under Controlled Root due to DIMINISHING_DISORIENT returning a compile error.
+            if (spellproto->Id == 82691)
+               return DIMINISHING_CONTROLLED_ROOT;				
             break;
         }
         case SPELLFAMILY_WARRIOR:
@@ -3031,6 +3039,13 @@ void SpellMgr::LoadSpellInfoCorrections()
             case 42835: // Spout, remove damage effect, only anim is needed
                 spellInfo->Effects[EFFECT_0].Effect = 0;
                 break;
+            case 85117: // Divine Purpose (Rank 1)
+            case 86172: // Divine Purpose (Rank 2)
+                spellInfo->AttributesEx3 = 0; 
+                break;
+            case 90174: // Divine Purpose Proc
+                spellInfo->ProcCharges = 1;
+                break;				
             case 30657: // Quake
                 spellInfo->Effects[EFFECT_0].TriggerSpell = 30571;
                 break;
@@ -3069,6 +3084,53 @@ void SpellMgr::LoadSpellInfoCorrections()
             case 59372: // Energize Cores
                 spellInfo->Effects[EFFECT_0].TargetA = SpellImplicitTargetInfo(TARGET_UNIT_SRC_AREA_ENEMY);
                 break;
+            case 13795: // Immolation Trap
+            case 13809: // Ice Trap
+            case 82941: // Ice Trap        - Trap Launcher
+            case 1499:  // Freezing Trap
+            case 60192: // Freezing Trap   - Trap Launcher
+            case 13813: // Explosive Trap
+            case 82939: // Explosive Trap  - Trap Launcher
+            case 34600: // Snake Trap
+            case 82945: // Fire - Trap Launcher 1
+            case 77769: // Trap Launcher
+            case 82948: // Nature - Trap Launcher
+            case 136:   // Mend Pet
+            case 82661: // Aspect of the Fox
+            case 5118:  // Aspect of the Cheetah
+            case 13159: // Aspect of the Pack
+            case 20043: // Aspect of the Wild
+            case 19263: // Deterrence
+            // Dont Remove Stealth From Camouflage
+                spellInfo->AttributesEx |= SPELL_ATTR1_NOT_BREAK_STEALTH;
+                break;
+            case 13165: // Aspect of the Hawk
+                //spellInfo->Multiplier[0] = 4.515f; // This will be activated soon, we need more improvements in Spell Coefficients
+                spellInfo->AttributesEx |= SPELL_ATTR1_NOT_BREAK_STEALTH;
+                break;
+            case 8494: // Mana Shield (rank 2)
+                // because of bug in dbc
+                spellInfo->ProcChance = 0;
+                break;
+			// Heroism
+            case 32182:
+				spellInfo->ExcludeCasterAuraSpell = 57723; // Exhaustion
+				break;
+			// Bloodlust
+            case 2825:
+				spellInfo->ExcludeCasterAuraSpell = 57724; // Sated
+				break;
+			// Time Warp
+			case 80353:
+				spellInfo->ExcludeCasterAuraSpell = 80354; // Temporal Displacement
+				break;
+			// Ancient Hysteria
+			case 90355:
+				spellInfo->ExcludeCasterAuraSpell = 95809; // Insanity
+				break;
+            case 20335: // Heart of the Crusader
+            case 20336:
+            case 20337:
             case 63320: // Glyph of Life Tap
             case 53228: // Rapid Killing (Rank 1)
             case 53232: // Rapid Killing (Rank 2)
@@ -3169,10 +3231,6 @@ void SpellMgr::LoadSpellInfoCorrections()
                 break;
             case 44544: // Fingers of Frost
                 spellInfo->Effects[EFFECT_0].SpellClassMask = flag96(685904631, 1151048, 0);
-                break;
-            case 74396: // Fingers of Frost visual buff
-                spellInfo->ProcCharges = 2;
-                spellInfo->StackAmount = 0;
                 break;
             case 28200: // Ascendance (Talisman of Ascendance trinket)
                 spellInfo->ProcCharges = 6;
@@ -3604,6 +3662,9 @@ void SpellMgr::LoadSpellInfoCorrections()
             case 72376: // Raise Dead
                 spellInfo->MaxAffectedTargets = 3;
                 spellInfo->Effects[EFFECT_0].RadiusEntry = sSpellRadiusStore.LookupEntry(EFFECT_RADIUS_50000_YARDS); // 50000yd
+                break;
+            case 52212: // Death and Decay
+                spellInfo->AttributesEx6 |= SPELL_ATTR6_CAN_TARGET_INVISIBLE;
                 break;
             case 71809: // Jump
                 spellInfo->RangeEntry = sSpellRangeStore.LookupEntry(3); // 20yd

@@ -1,5 +1,9 @@
  /*
+ *
+ * Copyright (C) 2011-2014 ArkCORE <http://www.arkania.net/>
+ *
  * Copyright (C) 2008-2014 TrinityCore <http://www.trinitycore.org/>
+ *
  * Copyright (C) 2006-2009 ScriptDev2 <https://scriptdev2.svn.sourceforge.net/>
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -40,6 +44,15 @@ EndContentData */
 #include "CellImpl.h"
 #include "GridNotifiersImpl.h"
 #include "GridNotifiers.h"
+
+enum Azuremyst_Isle
+{
+	NPC_NESTLEWOOD_OWLKIN				= 16518,
+
+	QUEST_INOCULATION					= 9303,
+
+	SPELL_INOCULATE_NESTLEWOOD_OWLKIN	= 29528,
+};
 
 /*######
 ## npc_draenei_survivor
@@ -137,6 +150,8 @@ public:
 
                     RunAwayTimer = 10000;
                     SayThanksTimer = 0;
+					CanSayHelp=false;
+
                 } else SayThanksTimer -= diff;
 
                 return;
@@ -728,6 +743,40 @@ class go_bristlelimb_cage : public GameObjectScript
         }
 };
 
+
+class npc_nestlewood_owlkin : public CreatureScript
+{
+    public:
+        npc_nestlewood_owlkin() : CreatureScript("npc_nestlewood_owlkin") { }
+
+        struct npc_nestlewood_owlkinAI : public ScriptedAI
+        {
+            npc_nestlewood_owlkinAI(Creature* creature) : ScriptedAI(creature) { }
+
+			void SpellHit(Unit * Hitter, SpellInfo const* spell) override
+			{		
+				Player* player = Hitter->ToPlayer();
+
+				if (!player)
+					return;				
+
+				if (spell->Id == SPELL_INOCULATE_NESTLEWOOD_OWLKIN )
+				{
+					if (player->GetQuestStatus(QUEST_INOCULATION) == QUEST_STATUS_INCOMPLETE) 
+					{						
+						player->KilledMonsterCredit(NPC_NESTLEWOOD_OWLKIN, NULL);
+						me->DespawnOrUnsummon(0);
+					}									
+				}
+			}                               
+        };
+
+        CreatureAI* GetAI(Creature* creature) const override
+        {
+            return new npc_nestlewood_owlkinAI(creature);
+        }
+};
+
 void AddSC_azuremyst_isle()
 {
     new npc_draenei_survivor();
@@ -738,4 +787,5 @@ void AddSC_azuremyst_isle()
     new go_ravager_cage();
     new npc_stillpine_capitive();
     new go_bristlelimb_cage();
+	new npc_nestlewood_owlkin();
 }

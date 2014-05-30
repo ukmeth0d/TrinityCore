@@ -715,7 +715,26 @@ uint32 Unit::DealDamage(Unit* victim, uint32 damage, CleanDamage const* cleanDam
             victim->ToPlayer()->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_TOTAL_DAMAGE_RECEIVED, damage);
 
         victim->ModifyHealth(-(int32)damage);
+		
+        // Vengeance (Tested and Working)
+        if (victim->HasAura(93098) || victim->HasAura(84839) || victim->HasAura(84840) || victim->HasAura(93099))
+        {
+            if(this != victim && this->GetTypeId() != TYPEID_PLAYER)
+            {
+                int32 value = ApplyPct(damage, 33);
+                if(uint32(value) > victim->CountPctFromMaxHealth(10))
+                    value = victim->CountPctFromMaxHealth(10);
 
+                if(victim->HasAura(76691))
+                {
+                    value += victim->GetAuraEffect(76691, EFFECT_0)->GetAmount();
+
+                    if(uint32(value) > victim->CountPctFromMaxHealth(10))
+                        value = victim->CountPctFromMaxHealth(10);
+                }
+                victim->CastCustomSpell(victim, 76691, &value, &value, NULL, true);
+            }
+        }
         if (damagetype == DIRECT_DAMAGE || damagetype == SPELL_DIRECT_DAMAGE)
         {
             victim->RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_DIRECT_DAMAGE, spellProto ? spellProto->Id : 0);
@@ -5050,6 +5069,22 @@ bool Unit::HandleDummyAuraProc(Unit* victim, uint32 damage, AuraEffect* triggere
         {
             switch (dummySpell->Id)
             {
+                // Flame Imbued
+                case 82663:
+                    if (procSpell->Id == 82662)
+                    {
+                        basepoints0 = triggerAmount;
+                        CastCustomSpell(victim, 82813, &basepoints0, NULL, NULL, true);
+                    }
+                    break;
+                // Frost Imbued
+                case 82666:
+                    if (procSpell->Id == 82667)
+                    {
+                        basepoints0 = triggerAmount;
+                        CastCustomSpell(victim, 82817, &basepoints0, NULL, NULL, true);
+                    }
+                    break;				
                 // Unstable Power
                 case 24658:
                 {
@@ -5465,6 +5500,48 @@ bool Unit::HandleDummyAuraProc(Unit* victim, uint32 damage, AuraEffect* triggere
                 triggered_spell_id = 37436;
                 break;
             }
+            switch (dummySpell->Id)
+            {
+				case 79683: // Arcane Missiles!
+                {
+                    // Do not let arcane missiles missile remove the activation aura
+                    if (procSpell->Id == 7268)
+                        return false;
+                    break;
+                } 
+                // Glyph of Polymorph
+                case 56375:
+                {
+                    if (!target)
+                        return false;
+                    target->RemoveAurasByType(SPELL_AURA_PERIODIC_DAMAGE, 0, target->GetAura(32409)); // SW:D shall not be removed.
+                    target->RemoveAurasByType(SPELL_AURA_PERIODIC_DAMAGE_PERCENT);
+                    target->RemoveAurasByType(SPELL_AURA_PERIODIC_LEECH);
+                    return true;
+                }
+                // Glyph of Icy Veins
+                case 56374:
+                {
+                    RemoveAurasByType(SPELL_AURA_HASTE_SPELLS, 0, 0, true, false);
+                    RemoveAurasByType(SPELL_AURA_MOD_DECREASE_SPEED);
+                    return true;
+                }
+                // Permafrost
+                case 11175:
+                case 12569:
+                case 12571:
+                {
+                    if (!GetGuardianPet())
+                        return false;
+
+                    // heal amount
+                    basepoints0 = CalculatePct(damage, triggerAmount);
+                    target = this;
+                    triggered_spell_id = 91394;
+                    break;
+                }
+            }
+            break;
         }
         case SPELLFAMILY_WARLOCK:
         {
@@ -5517,6 +5594,38 @@ bool Unit::HandleDummyAuraProc(Unit* victim, uint32 damage, AuraEffect* triggere
             }
             switch (dummySpell->Id)
             {
+				case 79437: // Soulburn: Healthstone
+				{
+					basepoints0 = CalculatePct(GetCreateHealth(), triggerAmount);
+					break;
+				}
+                // Glyph of Shadowflame
+                case 63310:
+                {
+                    triggered_spell_id = 63311;
+                    break;
+                }
+                // Nightfall
+                case 18094:
+                case 18095:
+                // Glyph of corruption
+                case 56218:
+                {
+                    target = this;
+                    triggered_spell_id = 17941;
+                    break;
+                }
+                // Soul Leech
+                case 30293:
+                case 30295:
+                {
+                    basepoints0 = CalculatePct(int32(damage), triggerAmount);
+                    target = this;
+                    triggered_spell_id = 30294;
+                    // Replenishment
+                    CastSpell(this, 57669, true, castItem, triggeredByAura);
+                    break;
+                }
                 // Shadowflame (Voidheart Raiment set bonus)
                 case 37377:
                 {
@@ -5546,8 +5655,183 @@ bool Unit::HandleDummyAuraProc(Unit* victim, uint32 damage, AuraEffect* triggere
         }
         case SPELLFAMILY_PRIEST:
         {
+            // Shadowy Apparition
+            if (dummySpell->SpellIconID == 4879)
+            {
+                if (!victim || !victim->IsAlive())
+                    return false;
+
+                if (effIndex != 0)
+                    return false;
+
+                int32 roll_chance = dummySpell->Effects[EFFECT_0].CalcValue();
+
+                if (ToPlayer()->isMoving())
+                        roll_chance *= int32(dummySpell->Effects[EFFECT_1].CalcValue() / 3);
+
+                // Summon Shadowy Apparition
+                if (roll_chance_i(roll_chance))
+                {
+                    ToPlayer()->CastSpell(ToPlayer(), 87212, true, castItem, triggeredByAura);
+                    return true;
+                }
+                return false;
+            }
+            // Vampiric Touch
+            if (dummySpell->SpellFamilyFlags[1] & 0x00000400)
+            {
+                if (!victim || !victim->IsAlive())
+                    return false;
+
+                if (effIndex != 0)
+                    return false;
+
+                // victim is caster of aura
+                if (triggeredByAura->GetCasterGUID() != victim->GetGUID())
+                    return false;
+
+                // Energize 1% of max. mana
+                victim->CastSpell(victim, 57669, true, castItem, triggeredByAura);
+                return true;                                // no hidden cooldown
+            }
+            // Body and Soul
+            if (dummySpell->SpellIconID == 2218)
+            {
+                // Proc only from Cure Disease on self cast
+                if (procSpell->Id != 528 || victim != this || !roll_chance_i(triggerAmount))
+                    return false;
+                triggered_spell_id = 64136;
+                target = this;
+                break;
+            }
+			// Shadow Word: PAIN
+            if(dummySpell->Id == 589)
+            {
+                uint32 chance = 10;
+                //Harnessed Shadows increase chance of creating a shadow orb by 4 and 8%
+                //Rank 1
+                if(AuraEffect const *auraEff = GetAuraEffect(33191, 0))
+                {
+                    chance += 4;
+                }
+                //Rank 2
+                else if(AuraEffect const *auraEff = GetAuraEffect(78228, 0))
+                {
+                    chance += 8;
+                }
+                //Proc shadow orb
+                if(roll_chance_i(chance))
+                {
+                    CastSpell(this,77487,true);
+                }
+            }
+			// Mind Flay
+            if(dummySpell->Id == 15407)
+            {
+                uint32 chance = 10;
+                //Harnessed Shadows increase chance of creating a shadow orb by 4 and 8%
+                //Rank 1
+                if(AuraEffect const *auraEff = GetAuraEffect(33191, 0))
+                {
+                    chance += 4;
+                }
+                //Rank 2
+                else if(AuraEffect const *auraEff = GetAuraEffect(78228, 0))
+                {
+                    chance += 8;
+                }
+                //Proc shadow orb
+                if(roll_chance_i(chance))
+                {
+                    CastSpell(this,77487,true);
+                }
+            }
+			// Divine Aegis
+            if (dummySpell->SpellIconID == 2820)
+            {
+                // Multiple effects stack, so let's try to find this aura.
+                int32 bonus = 0;
+                if (AuraEffect *aurEff = target->GetAuraEffect(47753, 0))
+                    bonus = aurEff->GetAmount();
+
+                basepoints0 = CalculatePct(int32(damage), triggerAmount) + bonus;
+                if (basepoints0 > target->getLevel() * 125)
+                    basepoints0 = target->getLevel() * 125;
+
+                triggered_spell_id = 47753;
+                break;
+            }
             switch (dummySpell->Id)
             {
+                // Sin and Punishment
+                case 87100:
+                case 87099:
+                {
+                    if (Player* caster = triggeredByAura->GetCaster()->ToPlayer())
+                    {
+                        if (caster->HasSpellCooldown(34433))
+                        {
+                            uint32 seconds = triggeredByAura->GetSpellInfo()->Effects[triggeredByAura->GetEffIndex()].CalcValue();
+                            caster->ReduceSpellCooldown(34433, seconds);
+                            return true;
+                        }
+                    }
+                    return false;
+                }
+                // Train of Thought
+                case 92295:
+                case 92297:
+                {
+                    // Greater Heal
+                    if (procSpell->Id == 2060)
+                    {
+                        if (Player* caster = triggeredByAura->GetCaster()->ToPlayer())
+                        {
+                            if (caster->HasSpellCooldown(89485))
+                            {
+                                uint32 seconds = triggeredByAura->GetSpellInfo()->Effects[triggeredByAura->GetEffIndex()].CalcValue();
+                                caster->ReduceSpellCooldown(89485, seconds);
+                                return true;
+                            }
+                        }
+                    }
+
+                    // Penance
+                    if (procSpell->Id == 585)
+                    {
+                        if (Player* caster = triggeredByAura->GetCaster()->ToPlayer())
+                        {
+                            if (caster->HasSpellCooldown(47540))
+                            {
+                                uint32 seconds = triggeredByAura->GetSpellInfo()->Effects[triggeredByAura->GetEffIndex()].CalcValue();
+                                caster->ReduceSpellCooldown(47540, uint32(seconds / 10));
+                                return true;
+                            }
+                        }
+                    }
+                }
+                // Vampiric Embrace
+                case 15286:
+                {
+                    if (!victim || !victim->IsAlive() || procSpell->SpellFamilyFlags[1] & 0x80000)
+                        return false;
+
+                    // heal amount
+                    int32 total = CalculatePct(int32(damage), triggerAmount);
+                    int32 team = total / 5;
+                    int32 self = total - team;
+                    CastCustomSpell(this, 15290, &team, &self, NULL, true, castItem, triggeredByAura);
+                    return true;                                // no hidden cooldown
+                }
+                // Mind Melt
+                case 87160:
+                case 81292:
+                {
+                    if (procSpell->Id != 73510)
+                        return false;
+
+                    break;
+                }			
                 // Priest Tier 6 Trinket (Ashtongue Talisman of Acumen)
                 case 40438:
                 {
@@ -5561,6 +5845,51 @@ bool Unit::HandleDummyAuraProc(Unit* victim, uint32 damage, AuraEffect* triggere
                         return false;
 
                     target = this;
+                    break;
+                }
+                // Phantasm
+                case 47569:
+                case 47570:
+                {
+                    if (!roll_chance_i(triggerAmount))
+                        return false;
+
+                    RemoveMovementImpairingAuras();
+                    break;
+                }
+				 // Glyph of Prayer of Healing
+                case 55680:
+                {
+                    triggered_spell_id = 56161;
+
+                    SpellInfo const* GoPoH = sSpellMgr->GetSpellInfo(triggered_spell_id);
+                    if (!GoPoH)
+                        return false;
+
+                    int EffIndex = 0;
+                    for (uint8 i = 0; i < MAX_SPELL_EFFECTS; i++)
+                    {
+                        if (GoPoH->Effects[i].Effect == SPELL_EFFECT_APPLY_AURA)
+                        {
+                            EffIndex = i;
+                            break;
+                        }
+                    }
+                    int32 tickcount = GoPoH->GetMaxDuration() / GoPoH->Effects[EffIndex].Amplitude;
+                    if (!tickcount)
+                        return false;
+
+                    basepoints0 = CalculatePct(int32(damage), triggerAmount) / tickcount;
+                    break;
+                }
+                // Glyph of Dispel Magic
+                case 55677:
+                {
+                    if (!target || !target->IsFriendlyTo(this))
+                        return false;
+
+                    basepoints0 = int32(target->CountPctFromMaxHealth(triggerAmount));
+                    triggered_spell_id = 56131;
                     break;
                 }
                 // Oracle Healing Bonus ("Garments of the Oracle" set)
@@ -5746,30 +6075,203 @@ bool Unit::HandleDummyAuraProc(Unit* victim, uint32 damage, AuraEffect* triggere
         }
         case SPELLFAMILY_PALADIN:
         {
+            // Light's Beacon - Beacon of Light
+            if (dummySpell->Id == 53651)
+            {
+                if (!victim)
+                    return false;
+                triggered_spell_id = 0;
+                Unit* beaconTarget = NULL;
+                if (GetTypeId() != TYPEID_PLAYER)
+                {
+                    beaconTarget = triggeredByAura->GetBase()->GetCaster();
+                    if (!beaconTarget || beaconTarget == this || !(beaconTarget->GetAura(53563, victim->GetGUID())))
+                        return false;
+                    basepoints0 = int32(damage);
+                    triggered_spell_id = procSpell->IsRankOf(sSpellMgr->GetSpellInfo(635)) ? 53652 : 53654;
+                }
+                else
+                {    // Check Party/Raid Group
+                    if (Group* group = ToPlayer()->GetGroup())
+                    {
+                        for (GroupReference* itr = group->GetFirstMember(); itr != NULL; itr = itr->next())
+                        {
+                            if (Player* member = itr->GetSource())
+                            {
+                                // check if it was heal by paladin which casted this beacon of light
+                                if (member->GetAura(53563, victim->GetGUID()))
+                                {
+                                    // do not proc when target of beacon of light is healed
+                                    if (member == this)
+                                        return false;
+
+                                    beaconTarget = member;
+                                    basepoints0 = int32(damage);
+                                    triggered_spell_id = procSpell->IsRankOf(sSpellMgr->GetSpellInfo(635)) ? 53652 : 53654;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (triggered_spell_id && beaconTarget)
+                {
+					Player* caster = ToPlayer();
+                    int32 percent = 0;
+                    switch (procSpell->Id)
+                    {
+                        case 85673: // Word of Glory
+                        case 20473: // Holy Shock
+                        case 19750: // Flash of Light
+                        case 82326: // Divine Light
+                        case 85222: // Light of Dawn
+                            percent = triggerAmount; // 50% heal from these spells
+                            break;
+                        case 635:   // Holy Light
+                            percent = triggerAmount * 2; // 100% heal from Holy Light
+                            break;
+                    }
+                    basepoints0 = CalculatePct(damage, percent);
+                    victim->CastCustomSpell(beaconTarget, triggered_spell_id, &basepoints0, NULL, NULL, true, 0, triggeredByAura);
+                    return true;
+                }
+
+                return false;
+            }
+            // Seal of Righteousness - melee proc dummy (addition ${$MWS*(0.011*$AP+0.022*$SPH)} damage)
+            if (dummySpell->SpellFamilyFlags[1]& 0x20000000)
+            {
+                if (effIndex != 0)
+                    return false;
+                triggered_spell_id = 25742;
+                float ap = GetTotalAttackPowerValue(BASE_ATTACK);
+                int32 holy = SpellBaseDamageBonusDone(SPELL_SCHOOL_MASK_HOLY) + victim->SpellBaseDamageBonusTaken(SPELL_SCHOOL_MASK_HOLY);
+                basepoints0 = (int32)GetAttackTime(BASE_ATTACK) * int32(ap * 0.011f + 0.022f * holy) / 1000;
+                break;
+            }
+            // Righteous Vengeance
+            if (dummySpell->SpellIconID == 3025)
+            {
+                // 4 damage tick
+                basepoints0 = triggerAmount * damage / 400;
+                triggered_spell_id = 61840;
+                // Add remaining ticks to damage done
+                basepoints0 += victim->GetRemainingPeriodicAmount(GetGUID(), triggered_spell_id, SPELL_AURA_PERIODIC_DAMAGE);
+                break;
+            }
+            // Sheath of Light
+            if (dummySpell->SpellIconID == 3030)
+            {
+                // 4 healing tick
+                basepoints0 = triggerAmount * damage / 400;
+                triggered_spell_id = 54203;
+                break;
+            }
             // Judgements of the Wise
             if (dummySpell->SpellIconID == 3017)
             {
                 target = this;
                 triggered_spell_id = 31930;
                 break;
+            }			
+            // Sacred Shield
+            if (dummySpell->SpellFamilyFlags[1] & 0x80000)
+            {
+                if (procFlag & PROC_FLAG_TAKEN_SPELL_MAGIC_DMG_CLASS_POS)
+                {
+                    if (procSpell->SpellFamilyName == SPELLFAMILY_PALADIN && (procSpell->SpellFamilyFlags[0] & 0x40000000))
+                    {
+                        basepoints0 = damage / 12;
+
+                        if (basepoints0)
+                            CastCustomSpell(this, 66922, &basepoints0, NULL, NULL, true, 0, triggeredByAura, victim->GetGUID());
+
+                        return true;
+                    }
+                    else
+                        return false;
+                }
+                else if (damage > 0)
+                    triggered_spell_id = 58597;
+
+                // Item - Paladin T8 Holy 4P Bonus
+                if (Unit* caster = triggeredByAura->GetCaster())
+                    if (AuraEffect const* aurEff = caster->GetAuraEffect(64895, 0))
+                        cooldown = aurEff->GetAmount();
+
+                target = this;
+                break;
             }
             switch (dummySpell->Id)
             {
-                // Sacred Shield
-                case 53601:
+                // Judgements of the Bold
+                case 89901:
                 {
-                    if (procFlag & PROC_FLAG_TAKEN_SPELL_MAGIC_DMG_CLASS_POS)
+                    target = this;
+                    triggered_spell_id = 89906;
+                    break;
+                }
+                // Judgements of the Wise
+                case 31878:
+                {
+                    target = this;
+                    triggered_spell_id = 31930;
+                    break;
+                }
+                // Selfless Healer
+                case 85803:
+                case 85804:
+                {
+                    if (victim == this)
                         return false;
 
-                    if (damage > 0)
-                        triggered_spell_id = 58597;
+                    break;
+                }
+                // Ancient Healer
+                case 86674:
+                {
+                    int32 bp0 = damage;
+                    int32 bp1 = ((bp0 * 10) / 100);
 
-                    // Item - Paladin T8 Holy 4P Bonus
-                    if (Unit* caster = triggeredByAura->GetCaster())
-                        if (AuraEffect const* aurEff = caster->GetAuraEffect(64895, 0))
-                            cooldown = aurEff->GetAmount();
+                    if (!bp0 || !bp1)
+                        return false;
 
+                    if (victim && victim->IsFriendlyTo(this))
+                        CastCustomSpell(victim, 86678,&bp0,&bp1, 0, true, NULL, triggeredByAura, 0);
+                    else
+                        CastCustomSpell(this, 86678,&bp0,&bp1, 0, true, NULL, triggeredByAura, 0);
+                    return true;
+                }
+                // Ancient Crusader - Player
+                case 86701:
+                {
                     target = this;
+                    triggered_spell_id = 86700;
+                    break;
+                }
+                // Long Arm of The law
+                case 87168:
+                case 87172:
+                {
+                    if (roll_chance_f(triggerAmount) && !this->IsWithinDistInMap(victim, 15.0f))
+                    {
+                        target = this;
+                        triggered_spell_id = 87173;
+                        break;
+                    }
+                    break;
+                }
+                // Divine purpose
+                case 85117:
+                case 86172:
+                {
+                    if (roll_chance_i(triggerAmount))
+                    {
+                        target = this;
+                        triggered_spell_id = 90174;
+                        break;
+                    }
                     break;
                 }
                 // Holy Power (Redemption Armor set)
@@ -6171,7 +6673,40 @@ bool Unit::HandleDummyAuraProc(Unit* victim, uint32 damage, AuraEffect* triggere
                     return false;
                 }
                 break;
+                case 51483: // Earth's Grasp (Rank 1)
+                case 51485: // Earth's Grasp (Rank 2)
+                    // Earthbind Totem summon only
+                    if (procSpell->Id != 2484)
+                        return false;
+
+                    float chance = (float)triggerAmount;
+                    if (!roll_chance_f(chance))
+                        return false;
+
+                    triggered_spell_id = 64695;
+                break;
             }
+            // Focused Insight
+            if (dummySpell->SpellIconID == 4674)
+            {
+               if (!procSpell) return false;
+                // Los shocks cuestan % de mana, calculamos la cantidad de mana
+                int32 rawManaCost = procSpell->ManaCostPercentage * GetCreateMana() / 100;
+                // ManaCost relativo al shock
+                int32 manaReduction = -(rawManaCost * dummySpell->Effects[EFFECT_0].BasePoints) / 100;
+                int32 healBoost = dummySpell->Effects[EFFECT_1].BasePoints;
+
+                CastCustomSpell(victim, 77800, &manaReduction, &healBoost, &healBoost, true, 0, 0, GetGUID());
+                return true;
+            }
+            // Ancestral Awakening
+            if (dummySpell->SpellIconID == 3065)
+            {
+                triggered_spell_id = 52759;
+                basepoints0 = CalculatePct(int32(damage), triggerAmount);
+                target = this;
+                break;
+            }			
             // Frozen Power
             if (dummySpell->SpellIconID == 3780)
             {
@@ -6595,6 +7130,18 @@ bool Unit::HandleAuraProc(Unit* victim, uint32 /*damage*/, Aura* triggeredByAura
             }
             break;
         }
+		case SPELLFAMILY_ROGUE:
+			switch(dummySpell->Id)
+			{
+			// Gouge
+			case 1776:
+				*handled = true;
+				if(procSpell && procSpell->Id == 1776)
+					return false;
+				return true;
+				break;
+			}
+			break;
         case SPELLFAMILY_WARRIOR:
         {
             switch (dummySpell->Id)
@@ -7056,6 +7603,12 @@ bool Unit::HandleProcTriggerSpell(Unit* victim, uint32 damage, AuraEffect* trigg
             if (!procSpell || procSpell->PowerType != POWER_MANA || (procSpell->ManaCost == 0 && procSpell->ManaCostPercentage == 0 && procSpell->ManaCostPerlevel == 0))
                 return false;
             break;
+        }
+		// Bloodthirst (($m/100)% of max health)
+        case 23880:
+        {			
+			basepoints0 = int32(CountPctFromMaxHealth(5))/10;
+			break;
         }
         case 46916:  // Slam! (Bloodsurge proc)
         case 52437:  // Sudden Death
@@ -8788,9 +9341,11 @@ int32 Unit::SpellBaseDamageBonusDone(SpellSchoolMask schoolMask) const
         // Base value
         DoneAdvertisedBenefit += ToPlayer()->GetBaseSpellPowerBonus();
 
+
         // Check if we are ever using mana - PaperDollFrame.lua
         if (GetPowerIndex(POWER_MANA) != MAX_POWERS)
             DoneAdvertisedBenefit += std::max(0, int32(GetStat(STAT_INTELLECT)) - 10);  // spellpower from intellect
+    	uint32 spellPower = ToPlayer()->GetBaseSpellPowerBonus();
 
         // Damage bonus from stats
         AuraEffectList const& mDamageDoneOfStatPercent = GetAuraEffectsByType(SPELL_AURA_MOD_SPELL_DAMAGE_OF_STAT_PERCENT);
@@ -9074,6 +9629,13 @@ uint32 Unit::SpellHealingBonusDone(Unit* victim, SpellInfo const* spellProto, ui
     // No bonus healing for potion spells
     if (spellProto->SpellFamilyName == SPELLFAMILY_POTION)
         return healamount;
+
+	// and Warlock's Healthstones
+    if (spellProto->SpellFamilyName == SPELLFAMILY_WARLOCK && (spellProto->SpellFamilyFlags[0] & 0x10000))
+    {
+        healamount = 0.45 * (GetMaxHealth() - 10 * (STAT_STAMINA - 180));
+        return healamount;
+    }
 
     float DoneTotalMod = 1.0f;
     int32 DoneTotal = 0;
@@ -11116,6 +11678,26 @@ void Unit::ModSpellCastTime(SpellInfo const* spellProto, int32 & castTime, Spell
         castTime = int32(float(castTime) * m_modAttackSpeedPct[RANGED_ATTACK]);
     else if (spellProto->SpellVisual[0] == 3881 && HasAura(67556)) // cooking with Chef Hat.
         castTime = 500;
+		
+    // Aimed shot! Instant (Master Marksman)
+    if (spellProto->Id == 82928 && HasAura(82926))
+        castTime = -1000;
+
+    // Tree of life
+    if (spellProto->Id == 5176 && HasAura(33891)) // Wrath
+        castTime = castTime / 2;
+    if (spellProto->Id == 8936 && HasAura(33891)) // Regrowth
+        castTime = -1000;
+    if (spellProto->Id == 339 && HasAura(33891)) // Entangling Roots
+        castTime = -1000;
+
+    // Imp's firebolt
+    if (spellProto->Id == 3110 && HasAura(18694)) // Dark arts (Rank 1)
+        castTime = 1500;
+    if (spellProto->Id == 3110 && HasAura(85283)) // Dark arts (Rank 2)
+        castTime = 1250;
+    if (spellProto->Id == 3110 && HasAura(85284)) // Dark arts (Rank 3)
+        castTime = 1000;		
 }
 
 DiminishingLevels Unit::GetDiminishing(DiminishingGroup group)
@@ -11342,6 +11924,17 @@ bool Unit::HandleStatModifier(UnitMods unitMod, UnitModifierType modifierType, f
     {
         case BASE_VALUE:
         case TOTAL_VALUE:
+            switch (unitMod)
+            {
+                case UNIT_MOD_STAT_INTELLECT:
+                {
+                    int32 mod = GetTotalAuraModifier(SPELL_AURA_MOD_SPELL_POWER_PCT);
+                    if (mod > 0)
+                        amount *= 1.0 + mod / 100.0f;
+                }
+                break;
+            }
+
             m_auraModifiersGroup[unitMod][modifierType] += apply ? amount : -amount;
             break;
         case BASE_PCT:
@@ -14667,10 +15260,12 @@ float Unit::GetCombatRatingReduction(CombatRating cr) const
     return 0.0f;
 }
 
-uint32 Unit::GetCombatRatingDamageReduction(CombatRating cr, float rate, float cap, uint32 damage) const
+uint32 Unit::GetCombatRatingDamageReduction (CombatRating cr, float rate, float cap, uint32 damage) const
 {
-    float percent = std::min(GetCombatRatingReduction(cr) * rate, cap);
-    return CalculatePct(damage, percent);
+    float percent = GetCombatRatingReduction(cr) * rate;
+    if (percent > cap)
+        percent = cap;
+    return uint32(percent * damage / 100.0f);
 }
 
 uint32 Unit::GetModelForForm(ShapeshiftForm form) const
@@ -15916,6 +16511,52 @@ uint32 Unit::GetRemainingPeriodicAmount(uint64 caster, uint32 spellId, AuraType 
     return amount;
 }
 
+bool Unit::IsVisionObscured(Unit* victim)
+{
+    Aura* victimAura = NULL;
+    Aura* myAura = NULL;
+    Unit* victimCaster = NULL;
+    Unit* myCaster = NULL;
+
+    AuraEffectList const& vAuras = victim->GetAuraEffectsByType(SPELL_AURA_INTERFERE_TARGETTING);
+    for (AuraEffectList::const_iterator i = vAuras.begin(); i != vAuras.end(); ++i)
+    {
+        victimAura = (*i)->GetBase();
+        victimCaster = victimAura->GetCaster();
+        break;
+    }
+    AuraEffectList const& myAuras = GetAuraEffectsByType(SPELL_AURA_INTERFERE_TARGETTING);
+    for (AuraEffectList::const_iterator i = myAuras.begin(); i != myAuras.end(); ++i)
+    {
+        myAura = (*i)->GetBase();
+        myCaster = myAura->GetCaster();
+        break;
+    }
+
+    if ((myAura != NULL && myCaster == NULL) || (victimAura != NULL && victimCaster == NULL))
+        return false; // Failed auras, will result in crash
+
+    // E.G. Victim is in smoke bomb, and I'm not
+    // Spells fail unless I'm friendly to the caster of victim's smoke bomb
+    if (victimAura != NULL && myAura == NULL)
+    {
+        if (IsFriendlyTo(victimCaster))
+            return false;
+        else
+            return true;
+    }
+    // Victim is not in smoke bomb, while I am
+    // Spells fail if my smoke bomb aura's caster is my enemy
+    else if (myAura != NULL && victimAura == NULL)
+    {
+        if (IsFriendlyTo(myCaster))
+            return false;
+        else
+            return true;
+    }
+    return false;
+}
+
 void Unit::SendClearTarget()
 {
     WorldPacket data(SMSG_BREAK_TARGET, GetPackGUID().size());
@@ -16258,7 +16899,6 @@ bool Unit::IsSplineEnabled() const
 {
     return movespline->Initialized() && !movespline->Finalized();
 }
-
 
 void Unit::BuildValuesUpdate(uint8 updateType, ByteBuffer* data, Player* target) const
 {

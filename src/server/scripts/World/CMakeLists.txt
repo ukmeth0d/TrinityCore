@@ -22,6 +22,8 @@ set(scripts_STAT_SRCS
   World/npc_professions.cpp
   World/npc_taxi.cpp
   World/npcs_special.cpp
+  World/duel_reset.cpp
+  World/npc_trainings_dummy.cpp
 )
 
 message("  -> Prepared: World")

@@ -1,5 +1,9 @@
 /*
+ *
+ * Copyright (C) 2011-2014 ArkCORE <http://www.arkania.net/>
+ *
  * Copyright (C) 2008-2014 TrinityCore <http://www.trinitycore.org/>
+ *
  * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -332,12 +336,12 @@ inline void Battleground::_ProcessOfflineQueue()
         BattlegroundPlayerMap::iterator itr = m_Players.find(*(m_OfflineQueue.begin()));
         if (itr != m_Players.end())
         {
-            if (itr->second.OfflineRemoveTime <= sWorld->GetGameTime())
-            {
+            // if (itr->second.OfflineRemoveTime <= sWorld->GetGameTime())
+            // {
                 RemovePlayerAtLeave(itr->first, true, true);// remove player from BG
                 m_OfflineQueue.pop_front();                 // remove from offline queue
                 //do not use itr for anything, because it is erased in RemovePlayerAtLeave()
-            }
+            //}
         }
     }
 }
@@ -1881,6 +1885,10 @@ void Battleground::HandleKillPlayer(Player* victim, Player* killer)
 {
     // Keep in mind that for arena this will have to be changed a bit
 
+    // Don't reward credit for killing ourselves, like fall damage of hellfire
+    if (victim && killer && killer == victim)
+        return;
+	
     // Add +1 deaths
     UpdatePlayerScore(victim, SCORE_DEATHS, 1);
     // Add +1 kills to group and +1 killing_blows to killer

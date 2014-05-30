@@ -1,5 +1,9 @@
 /*
+ *
+ * Copyright (C) 2011-2014 ArkCORE <http://www.arkania.net/>
+ *
  * Copyright (C) 2008-2014 TrinityCore <http://www.trinitycore.org/>
+ *
  * Copyright (C) 2006-2009 ScriptDev2 <https://scriptdev2.svn.sourceforge.net/>
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -1216,6 +1220,12 @@ public:
                     player->SEND_GOSSIP_MENU(17494, creature->GetGUID());
                 else canBuy = true;
                 break;
+			case 485100:                                          //Kall Worthaton double case 48510  but different from above..
+				if (player->GetReputationRank(1133) != REP_EXALTED && race != RACE_GOBLIN)
+					player->SEND_GOSSIP_MENU(5840, creature->GetGUID());
+				else canBuy = true;
+				break;
+
         }
 
         if (canBuy)
@@ -1511,6 +1521,227 @@ class npc_brewfest_reveler : public CreatureScript
         CreatureAI* GetAI(Creature* creature) const override
         {
             return new npc_brewfest_revelerAI(creature);
+        }
+};
+
+class npc_mirror_image : public CreatureScript
+{
+public:
+    npc_mirror_image() : CreatureScript("npc_mirror_image") { }
+
+    struct npc_mirror_imageAI : CasterAI
+    {
+        npc_mirror_imageAI(Creature* creature) : CasterAI(creature) {}
+
+        void InitializeAI() override
+        {
+            CasterAI::InitializeAI();
+            Unit* owner = me->GetOwner();
+            if (!owner)
+                return;
+            // Inherit Master's Threat List (not yet implemented)
+            owner->CastSpell((Unit*)NULL, 58838, true);
+            // here mirror image casts on summoner spell (not present in client dbc) 49866
+            // here should be auras (not present in client dbc): 35657, 35658, 35659, 35660 selfcasted by mirror images (stats related?)
+            // Clone Me!
+            owner->CastSpell(me, 45204, false);
+            if (owner->ToPlayer() && owner->ToPlayer()->GetSelectedUnit())
+            me->AI()->AttackStart(owner->ToPlayer()->GetSelectedUnit());
+        }
+           void EnterCombat(Unit* who)
+        {
+            if (spells.empty())
+                return;
+
+            for (SpellVct::iterator itr = spells.begin(); itr != spells.end(); ++itr)
+            {
+                if (AISpellInfo[*itr].condition == AICOND_AGGRO)
+                    me->CastSpell(who, *itr, false);
+                else if (AISpellInfo[*itr].condition == AICOND_COMBAT)
+                {
+                    uint32 cooldown = GetAISpellInfo(*itr)->realCooldown;
+                    events.ScheduleEvent(*itr, cooldown);
+                }
+            }
+        }
+
+
+        void UpdateAI(uint32 diff)
+        {
+            if (!UpdateVictim())
+                return;
+
+            events.Update(diff);
+
+            bool hasCC = false;
+            if (me->GetCharmerOrOwnerGUID() && me->GetVictim())
+                hasCC = me->GetVictim()->HasAuraType(SPELL_AURA_MOD_CONFUSE);
+
+            if (hasCC)
+            {
+                if (me->HasUnitState(UNIT_STATE_CASTING))
+                    me->CastStop();
+                me->AI()->EnterEvadeMode();
+                return;
+            }
+
+            if (me->HasUnitState(UNIT_STATE_CASTING))
+                return;
+
+            if (uint32 spellId = events.ExecuteEvent())
+            {
+                if (hasCC)
+                {
+                    events.ScheduleEvent(spellId, 500);
+                    return;
+                }
+
+                DoCast(spellId);
+                uint32 casttime = me->GetCurrentSpellCastTime(spellId);
+                events.ScheduleEvent(spellId, (casttime ? casttime : 500) + GetAISpellInfo(spellId)->realCooldown);
+            }
+    }
+
+        // Do not reload Creature templates on evade mode enter - prevent visual lost
+        void EnterEvadeMode() override
+        {
+            if (me->IsInEvadeMode() || !me->IsAlive())
+                return;
+
+            Unit* owner = me->GetCharmerOrOwner();
+
+            me->CombatStop(true);
+            if (owner && !me->HasUnitState(UNIT_STATE_FOLLOW))
+            {
+                me->GetMotionMaster()->Clear(false);
+                me->GetMotionMaster()->MoveFollow(owner, PET_FOLLOW_DIST, me->GetFollowAngle(), MOTION_SLOT_ACTIVE);
+            }
+        }
+    };
+
+    CreatureAI* GetAI(Creature* creature) const override
+    {
+        return new npc_mirror_imageAI(creature);
+    }
+};
+
+class npc_ebon_gargoyle : public CreatureScript
+{
+public:
+    npc_ebon_gargoyle() : CreatureScript("npc_ebon_gargoyle") { }
+
+    struct npc_ebon_gargoyleAI : CasterAI
+    {
+        npc_ebon_gargoyleAI(Creature* creature) : CasterAI(creature) {}
+
+        uint32 despawnTimer;
+
+        void InitializeAI() override
+        {
+            CasterAI::InitializeAI();
+            uint64 ownerGuid = me->GetOwnerGUID();
+            if (!ownerGuid)
+                return;
+            // Not needed to be despawned now
+            despawnTimer = 0;
+            // Find victim of Summon Gargoyle spell
+            std::list<Unit*> targets;
+            Trinity::AnyUnfriendlyUnitInObjectRangeCheck u_check(me, me, 30);
+            Trinity::UnitListSearcher<Trinity::AnyUnfriendlyUnitInObjectRangeCheck> searcher(me, targets, u_check);
+            me->VisitNearbyObject(30, searcher);
+            for (std::list<Unit*>::const_iterator iter = targets.begin(); iter != targets.end(); ++iter)
+                if ((*iter)->GetAura(49206, ownerGuid))
+                {
+                    me->Attack((*iter), false);
+                    break;
+                }
+        }
+
+        void JustDied(Unit* /*killer*/) override
+        {
+            // Stop Feeding Gargoyle when it dies
+            if (Unit* owner = me->GetOwner())
+                owner->RemoveAurasDueToSpell(50514);
+        }
+
+        // Fly away when dismissed
+        void SpellHit(Unit* source, SpellInfo const* spell) override
+        {
+            if (spell->Id != 50515 || !me->IsAlive())
+                return;
+
+            Unit* owner = me->GetOwner();
+
+            if (!owner || owner != source)
+                return;
+
+            // Stop Fighting
+            me->ApplyModFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE, true);
+            // Sanctuary
+            me->CastSpell(me, 54661, true);
+            me->SetReactState(REACT_PASSIVE);
+
+            //! HACK: Creature's can't have MOVEMENTFLAG_FLYING
+            // Fly Away
+            me->SetCanFly(true);
+            me->SetSpeed(MOVE_FLIGHT, 0.75f, true);
+            me->SetSpeed(MOVE_RUN, 0.75f, true);
+            float x = me->GetPositionX() + 20 * std::cos(me->GetOrientation());
+            float y = me->GetPositionY() + 20 * std::sin(me->GetOrientation());
+            float z = me->GetPositionZ() + 40;
+            me->GetMotionMaster()->Clear(false);
+            me->GetMotionMaster()->MovePoint(0, x, y, z);
+
+            // Despawn as soon as possible
+            despawnTimer = 4 * IN_MILLISECONDS;
+        }
+
+        void UpdateAI(uint32 diff) override
+        {
+            if (despawnTimer > 0)
+            {
+                if (despawnTimer > diff)
+                    despawnTimer -= diff;
+                else
+                    me->DespawnOrUnsummon();
+                return;
+            }
+            CasterAI::UpdateAI(diff);
+        }
+    };
+
+    CreatureAI* GetAI(Creature* creature) const override
+    {
+        return new npc_ebon_gargoyleAI(creature);
+    }
+};
+
+class npc_lightwell : public CreatureScript
+{
+    public:
+        npc_lightwell() : CreatureScript("npc_lightwell") { }
+
+        struct npc_lightwellAI : public PassiveAI
+        {
+            npc_lightwellAI(Creature* creature) : PassiveAI(creature)
+            {
+                DoCast(me, 59907, false);
+            }
+
+            void EnterEvadeMode() override
+            {
+                if (!me->IsAlive())
+                    return;
+
+                me->DeleteThreatList();
+                me->CombatStop(true);
+                me->ResetPlayerDamageReq();
+            }
+        };
+
+        CreatureAI* GetAI(Creature* creature) const override
+        {
+            return new npc_lightwellAI(creature);
         }
 };
 
@@ -2351,6 +2582,427 @@ public:
     };
 };
 
+// npc_flame_orb
+enum FlameOrb
+{
+    SPELL_FLAME_ORB_DAMAGE          = 86719,
+    FLAME_ORB_DISTANCE              = 120
+};
+
+class npc_flame_orb : public CreatureScript
+{
+public:
+    npc_flame_orb() : CreatureScript("npc_flame_orb") {}
+
+    struct npc_flame_orbAI : public ScriptedAI
+    {
+        npc_flame_orbAI(Creature *creature) : ScriptedAI(creature)
+        {
+            x = me->GetPositionX();
+            y = me->GetPositionY();
+            z = me->GetOwner()->GetPositionZ()+2;
+            o = me->GetOrientation();
+            me->NearTeleportTo(x, y, z, o, true);
+            angle = me->GetOwner()->GetAngle(me);
+            newx = me->GetPositionX() + FLAME_ORB_DISTANCE/2 * cos(angle);
+            newy = me->GetPositionY() + FLAME_ORB_DISTANCE/2 * sin(angle);
+            CombatCheck = false;
+        }
+
+        float x, y, z, o, newx, newy, angle;
+        bool CombatCheck;
+        uint32 DespawnTimer;
+        uint32 DespawnCheckTimer;
+        uint32 DamageTimer;
+
+        void EnterCombat(Unit* /*target*/)
+        {
+            me->GetMotionMaster()->MoveCharge(newx, newy, z, 1.14286f);  // Normal speed
+            DespawnTimer = 15 * IN_MILLISECONDS;
+            CombatCheck = true;
+        }
+
+        void Reset()
+        {
+            me->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE|UNIT_FLAG_NON_ATTACKABLE);
+            me->AddUnitMovementFlag(MOVEMENTFLAG_FLYING);
+            me->SetReactState(REACT_PASSIVE);
+            if (CombatCheck == true)
+                DespawnTimer = 15 * IN_MILLISECONDS;
+            else
+                DespawnTimer = 4 * IN_MILLISECONDS;
+            DamageTimer = 1 * IN_MILLISECONDS;
+            me->GetMotionMaster()->MovePoint(0, newx, newy, z);
+        }
+
+        void UpdateAI(uint32 diff)
+        {
+            if (!me->IsInCombat() && CombatCheck == false)
+            {
+                me->SetSpeed(MOVE_RUN, 2, true);
+                me->SetSpeed(MOVE_FLIGHT, 2, true);
+            }
+
+            if (DespawnTimer <= diff)
+            {
+                me->SetVisible(false);
+                me->DisappearAndDie();
+            }
+            else
+                DespawnTimer -= diff;
+
+            if (DamageTimer <= diff)
+            {
+                if (Unit* target = me->SelectNearestTarget(15))
+                    DoCast(target, SPELL_FLAME_ORB_DAMAGE);
+
+                DamageTimer = 1 * IN_MILLISECONDS;
+            }
+            else
+                DamageTimer -= diff;
+        }
+    };
+
+    CreatureAI* GetAI(Creature* creature) const
+    {
+        return new npc_flame_orbAI(creature);
+    }
+};
+
+// npc_frostfire_orb
+enum FrostfireOrb
+{
+    SPELL_FROSTFIRE_ORB_DAMAGE_RANK_1   = 95969,
+    SPELL_FROSTFIRE_ORB_DAMAGE_RANK_2   = 84721,
+    FROSTFIRE_ORB_DISTANCE              = 120
+};
+
+class npc_frostfire_orb : public CreatureScript
+{
+public:
+    npc_frostfire_orb() : CreatureScript("npc_frostfire_orb") {}
+
+    struct npc_frostfire_orbAI : public ScriptedAI
+    {
+        npc_frostfire_orbAI(Creature* creature) : ScriptedAI(creature)
+        {
+            x = me->GetPositionX();
+            y = me->GetPositionY();
+            z = me->GetOwner()->GetPositionZ()+2;
+            o = me->GetOrientation();
+            me->NearTeleportTo(x, y, z, o, true);
+            angle = me->GetOwner()->GetAngle(me);
+            newx = me->GetPositionX() + FROSTFIRE_ORB_DISTANCE/2 * cos(angle);
+            newy = me->GetPositionY() + FROSTFIRE_ORB_DISTANCE/2 * sin(angle);
+            CombatCheck = false;
+        }
+
+        float x,y,z,o,newx,newy,angle;
+        bool CombatCheck;
+        uint32 despawnTimer;
+        uint32 despawnCheckTimer;
+        uint32 damageTimer;
+
+        void EnterCombat(Unit* /*target*/)
+        {
+            me->GetMotionMaster()->MoveCharge(newx, newy, z, 1.14286f); // Normal speed
+            despawnTimer = 15 * IN_MILLISECONDS;
+            CombatCheck = true;
+        }
+
+        void Reset()
+        {
+            me->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE | UNIT_FLAG_NON_ATTACKABLE);
+            me->AddUnitMovementFlag(MOVEMENTFLAG_FLYING);
+            me->SetReactState(REACT_PASSIVE);
+            if (CombatCheck == true)
+                despawnTimer = 15 * IN_MILLISECONDS;
+            else
+                despawnTimer = 4 * IN_MILLISECONDS;
+            damageTimer = 1 * IN_MILLISECONDS;
+            me->GetMotionMaster()->MovePoint(0, newx, newy, z);
+        }
+
+        void UpdateAI(uint32 diff)
+        {
+            if (!me->IsInCombat() && CombatCheck == false)
+            {
+                me->SetSpeed(MOVE_RUN, 2, true);
+                me->SetSpeed(MOVE_FLIGHT, 2, true);
+            }
+
+            if (despawnTimer <= diff)
+                me->DisappearAndDie();
+            else
+                despawnTimer -= diff;
+
+            if (damageTimer <= diff)
+            {
+                if (Unit* target = me->SelectNearestTarget(15))
+                    if (me->GetOwner()->HasAura(84726))
+                        DoCast(target, SPELL_FROSTFIRE_ORB_DAMAGE_RANK_1);
+                    else
+                        DoCast(target, SPELL_FROSTFIRE_ORB_DAMAGE_RANK_2);
+
+                damageTimer = 1 * IN_MILLISECONDS;
+            }
+            else
+                damageTimer -= diff;
+        }
+    };
+
+    CreatureAI* GetAI(Creature* creature) const
+    {
+        return new npc_frostfire_orbAI(creature);
+    }
+};
+
+class npc_shadowy_apparition: public CreatureScript
+{
+public:
+    npc_shadowy_apparition () : CreatureScript("npc_shadowy_apparition")
+    {
+    }
+
+    struct npc_shadowy_apparitionAI: public ScriptedAI
+    {
+        npc_shadowy_apparitionAI (Creature* c) : ScriptedAI(c) {}
+
+        uint64 targetGuid;
+
+        void Reset ()
+        {
+            Unit* owner = me->GetOwner();
+            if (!owner)
+                return;
+            
+            me->SetWalk(true);
+            owner->CastSpell(me, 87213, false);
+            me->CastSpell(me, 87427, true);
+
+            if (me->GetCharmInfo())
+            {
+                me->GetCharmInfo()->SetIsAtStay(true);
+                me->GetCharmInfo()->SetIsFollowing(false);
+                me->GetCharmInfo()->SetIsReturning(false);
+            }
+        }
+
+        void MoveInLineOfSight (Unit* who)
+        {
+            if (who->GetGUID() == targetGuid && me->GetDistance(who) <= 1.0f)
+            {
+                me->CastCustomSpell(who, 87532, NULL, NULL, NULL, true, 0, 0, me->GetOwnerGUID());
+                me->CastSpell(me, 87529, true);
+                me->DisappearAndDie();
+            }
+        }
+
+        void UpdateAI (uint32 diff)
+        {
+            if (!UpdateVictim())
+            {
+                Unit* owner = me->GetOwner();
+
+                if (!owner)
+                    return;
+
+                if (Unit* target = owner->getAttackerForHelper())
+                {
+                    me->Attack(target, false);
+                    me->AddThreat(target, 100.0f);
+                    me->GetMotionMaster()->MoveChase(target, 0.0f, 0.0f);
+                    targetGuid = target->GetGUID();
+                }
+            }
+        }
+    };
+
+    CreatureAI* GetAI (Creature* creature) const
+    {
+        return new npc_shadowy_apparitionAI(creature);
+    }
+};
+
+
+class npc_ring_of_frost: public CreatureScript
+{
+public:
+    npc_ring_of_frost () :
+            CreatureScript("npc_ring_of_frost")
+    {
+    }
+
+    struct npc_ring_of_frostAI: public ScriptedAI
+    {
+        npc_ring_of_frostAI (Creature *c) :
+                ScriptedAI(c)
+        {
+        }
+        bool Isready;
+        uint32 timer;
+
+        void Reset ()
+        {
+            timer = 3000;          // 3sec
+            Isready = false;
+        }
+
+        void InitializeAI ()
+        {
+            ScriptedAI::InitializeAI();
+            Unit * owner = me->GetOwner();
+            if (!owner || owner->GetTypeId() != TYPEID_PLAYER)
+                return;
+
+            me->SetReactState(REACT_PASSIVE);
+            me->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE);
+            me->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+
+            // Remove other ring spawned by the player
+            {
+                CellCoord pair(Trinity::ComputeCellCoord(owner->GetPositionX(), owner->GetPositionY()));
+                Cell cell(pair);
+                //cell.data.Part.reserved = ALL_DISTRICT;
+                cell.SetNoCreate();
+
+                std::list<Creature*> templist;
+                Trinity::AllCreaturesOfEntryInGrid check(owner, me->GetEntry());
+                Trinity::CreatureListSearcher<Trinity::AllCreaturesOfEntryInGrid> searcher(owner, templist, check);
+
+                TypeContainerVisitor<Trinity::CreatureListSearcher<Trinity::AllCreaturesOfEntryInGrid>, GridTypeMapContainer> visitor(searcher);
+				cell.Visit(pair, visitor, *(owner->GetMap()), *owner, me->GetEntry());
+
+                if (!templist.empty())
+                    for (std::list<Creature*>::const_iterator itr = templist.begin(); itr != templist.end(); ++itr)
+                        if ((*itr)->GetOwner() == me->GetOwner() && *itr != me)
+                            (*itr)->DisappearAndDie();
+                templist.clear();
+            }
+        }
+
+        void EnterEvadeMode ()
+        {
+            return;
+        }
+
+        void CheckIfMoveInRing (Unit *who)
+        {
+            if (who->IsAlive() && me->IsInRange(who, 2.0f, 4.7f) && !who->HasAura(82691)/*<= target already frozen*/
+            && !who->HasAura(91264)/*<= target is immune*/
+            && me->IsWithinLOSInMap(who) && Isready)
+                me->CastSpell(who, 82691, true);
+        }
+
+        void UpdateAI (uint32 diff)
+        {
+            if (timer <= diff)
+            {
+                if (!Isready)
+                {
+                    Isready = true;
+                    timer = 9000;          // 9sec
+                }
+                else
+                    me->DisappearAndDie();
+            }
+            else
+                timer -= diff;
+
+            // Find all the enemies
+            std::list<Unit*> targets;
+            Trinity::AnyUnfriendlyUnitInObjectRangeCheck u_check(me, me, 5.0f);
+            Trinity::UnitListSearcher<Trinity::AnyUnfriendlyUnitInObjectRangeCheck> searcher(me, targets, u_check);
+            me->VisitNearbyObject(5.0f, searcher);
+            for (std::list<Unit*>::const_iterator iter = targets.begin(); iter != targets.end(); ++iter)
+                CheckIfMoveInRing(*iter);
+        }
+    };
+
+    CreatureAI* GetAI (Creature* pCreature) const
+    {
+        return new npc_ring_of_frostAI(pCreature);
+    }
+};
+
+// Power Word Barrier
+
+class npc_power_word_barrier : public CreatureScript
+{
+    public:
+    npc_power_word_barrier() : CreatureScript("npc_power_word_barrier") { }
+
+    struct npc_power_word_barrierAI : public ScriptedAI
+    {
+        npc_power_word_barrierAI(Creature *creature) : ScriptedAI(creature) {}
+
+        bool checker;
+        uint32 cron; // Duration
+
+        void Reset()
+        {
+            checker = false;
+            cron = 10000;
+            DoCast(me, 81781);
+        }
+
+        void InitializeAI()
+        {
+            ScriptedAI::InitializeAI();
+            Unit* owner = me->GetOwner();
+            if (!owner || owner->GetTypeId() != TYPEID_PLAYER)
+                return;
+
+            me->SetReactState(REACT_PASSIVE);
+            me->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE);
+            me->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+        }
+
+        void BarrierChecker(Unit* who)
+        {
+            if (who->IsAlive() && !who->HasAura(81782))
+            {
+                me->CastSpell(who, 81782, true);
+            }
+
+            if (who->IsAlive() && who->HasAura(81782))
+            {
+                if (AuraEffect const* aur = who->GetAuraEffect(81782, 0))
+                    aur->GetBase()->SetDuration(aur->GetSpellInfo()->GetMaxDuration(), true);
+            }
+        }
+
+        void UpdateAI(uint32 diff)
+        {
+            if (cron <= diff)
+            {
+                if (!checker)
+                {
+                    checker = true;
+                    cron = 10000;   //10 seconds
+                }
+                else
+                    me->DisappearAndDie();
+            }
+            else
+                cron -= diff;
+
+           //Check friendly entities
+           std::list<Unit*> targets;
+            Trinity::AnyFriendlyUnitInObjectRangeCheck u_check(me, me, 7.0f);
+            Trinity::UnitListSearcher<Trinity::AnyFriendlyUnitInObjectRangeCheck>searcher(me, targets, u_check);
+
+            me->VisitNearbyObject(7.0f, searcher);
+            for (std::list<Unit*>::const_iterator iter = targets.begin(); iter != targets.end(); ++iter)
+                BarrierChecker(*iter);
+        }
+    };
+
+    CreatureAI* GetAI(Creature* creature) const
+    {
+        return new npc_power_word_barrierAI(creature);
+    }
+};
 void AddSC_npcs_special()
 {
     new npc_air_force_bots();
@@ -2373,4 +3025,9 @@ void AddSC_npcs_special()
     new npc_experience();
     new npc_firework();
     new npc_spring_rabbit();
+	new npc_ring_of_frost();
+	new npc_flame_orb();
+    new npc_frostfire_orb();
+	new npc_shadowy_apparition();
+	new npc_power_word_barrier();
 }

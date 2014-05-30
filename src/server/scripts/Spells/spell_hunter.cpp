@@ -52,8 +52,11 @@ enum HunterSpells
     SPELL_HUNTER_SERPENT_STING                      = 1978,
     SPELL_HUNTER_SNIPER_TRAINING_R1                 = 53302,
     SPELL_HUNTER_SNIPER_TRAINING_BUFF_R1            = 64418,
-    SPELL_HUNTER_STEADY_SHOT_FOCUS                  = 77443,
-    SPELL_HUNTER_THRILL_OF_THE_HUNT                 = 34720
+    SPELL_HUNTER_STEADY_SHOT_FOCUS                  = 77443, //
+    SPELL_HUNTER_THRILL_OF_THE_HUNT                 = 34720,
+	SPELL_HUNTER_KILL_COMMAND                   	= 34026,
+	SPELL_HUNTER_KILL_COMMAND_TRIGGER               = 83381,
+	SPELL_HUNTER_IMPROVED_STEADY_SHOT            	= 53220,
 };
 
 enum MiscSpells
@@ -880,43 +883,100 @@ class spell_hun_sniper_training : public SpellScriptLoader
         }
 };
 
-// 56641 - Steady Shot
+// 56641 Steady Shot
+// 56641 Steady Shot
 class spell_hun_steady_shot : public SpellScriptLoader
 {
-    public:
-        spell_hun_steady_shot() : SpellScriptLoader("spell_hun_steady_shot") { }
+public:
+    spell_hun_steady_shot() : SpellScriptLoader("spell_hun_steady_shot") { }
 
-        class spell_hun_steady_shot_SpellScript : public SpellScript
+    class spell_hun_steady_shot_SpellScript : public SpellScript
+    {
+		PrepareSpellScript(spell_hun_steady_shot_SpellScript);
+
+        bool Validate(SpellInfo const* /*spellEntry*/)
         {
-            PrepareSpellScript(spell_hun_steady_shot_SpellScript);
-
-            bool Validate(SpellInfo const* /*spellInfo*/) override
-            {
-                if (!sSpellMgr->GetSpellInfo(SPELL_HUNTER_STEADY_SHOT_FOCUS))
-                    return false;
-                return true;
-            }
-
-            bool Load() override
-            {
-                return GetCaster()->GetTypeId() == TYPEID_PLAYER;
-            }
-
-            void HandleOnHit()
-            {
-                GetCaster()->CastSpell(GetCaster(), SPELL_HUNTER_STEADY_SHOT_FOCUS, true);
-            }
-
-            void Register() override
-            {
-                OnHit += SpellHitFn(spell_hun_steady_shot_SpellScript::HandleOnHit);
-            }
-        };
-
-        SpellScript* GetSpellScript() const override
-        {
-            return new spell_hun_steady_shot_SpellScript();
+            if (!sSpellMgr->GetSpellInfo(SPELL_HUNTER_STEADY_SHOT_FOCUS) || !sSpellMgr->GetSpellInfo(SPELL_HUNTER_GENERIC_ENERGIZE_FOCUS))
+                return false;
+            return true;
         }
+
+        int8 castCount;
+
+        void HandleDummy(SpellEffIndex effIndex)
+        {
+            Unit* caster = GetCaster();
+            Unit* target = GetHitUnit();
+            castCount++;
+
+            if(!caster || !target || caster->GetTypeId() != TYPEID_PLAYER)
+                return ;						
+            
+            // Termination
+            if (AuraEffect const* Termination = caster->GetDummyAuraEffect(SPELLFAMILY_HUNTER, 2008, 0))
+            {
+                // if (target->HealthBelowPct(25))
+                caster->CastSpell(caster, SPELL_HUNTER_GENERIC_ENERGIZE_FOCUS, true);					
+            }          
+        }
+
+        void HandleOnHit()
+        {
+            Unit* caster = GetCaster();
+            Unit* target = GetHitUnit();
+
+            if(!caster || !target || caster->GetTypeId() != TYPEID_PLAYER)
+                return ;
+						
+			if (Player* player = caster->ToPlayer())
+			{
+				// player->SetPower(POWER_FOCUS,player->GetPower(POWER_FOCUS) + 14); 	
+				player->CastSpell(caster, SPELL_HUNTER_STEADY_SHOT_FOCUS, true);
+			}            
+
+            // Improved Steady Shot Rank 1
+            if (caster->HasAura(53221))
+            {
+                if (castCount >= 2)
+                {
+                    int32 basepoints = 5;
+                    caster->CastCustomSpell(caster, SPELL_HUNTER_IMPROVED_STEADY_SHOT, &basepoints, NULL, NULL, true);
+                    castCount = 0;
+                }
+            }
+            // Improved Steady Shot Rank 2
+            else if (caster->HasAura(53222))
+            {
+                if (castCount >= 2)
+                {
+                    int32 basepoints = 10;
+                    caster->CastCustomSpell(caster, SPELL_HUNTER_IMPROVED_STEADY_SHOT, &basepoints, NULL, NULL, true);
+                    castCount = 0;
+                }
+            }
+            // Improved Steady Shot Rank 3
+            else if (caster->HasAura(53224))
+            {
+                if (castCount >= 2)
+                {
+                    int32 basepoints = 15;
+                    caster->CastCustomSpell(caster, SPELL_HUNTER_IMPROVED_STEADY_SHOT, &basepoints, NULL, NULL, true);
+                    castCount = 0;
+                }
+            }
+        }
+
+        void Register ()
+        {
+			OnEffectHitTarget += SpellEffectFn(spell_hun_steady_shot_SpellScript::HandleDummy, EFFECT_2, SPELL_EFFECT_DUMMY);          
+            OnHit += SpellHitFn(spell_hun_steady_shot_SpellScript::HandleOnHit);
+        }
+    };
+
+    SpellScript* GetSpellScript () const
+    {
+        return new spell_hun_steady_shot_SpellScript();
+    }
 };
 
 // 1515 - Tame Beast
@@ -1002,6 +1062,64 @@ class spell_hun_target_only_pet_and_owner : public SpellScriptLoader
         }
 };
 
+// 34026 Kill comamnd
+class spell_hun_kill_command : public SpellScriptLoader
+{	
+public:
+	spell_hun_kill_command() : SpellScriptLoader("spell_hun_kill_command") { }
+
+	class spell_hun_kill_command_SpellScript : public SpellScript
+	{
+		PrepareSpellScript(spell_hun_kill_command_SpellScript);
+	
+        bool Validate(SpellInfo const* /*spellEntry*/)
+        {
+            if (!sSpellMgr->GetSpellInfo(SPELL_HUNTER_KILL_COMMAND))
+                return false;	
+            return true;
+        }	
+
+        SpellCastResult CheckCastMeet()
+        {
+            Unit* pet = GetCaster()->GetGuardianPet();
+            Unit* petTarget = pet->GetVictim();
+            if (!pet)
+                return SPELL_FAILED_NO_PET;
+
+            // Make sure pet has a target and target is within 5 yards	
+            if (!petTarget || !pet->IsWithinDist(petTarget, 5.0f, true))
+            {
+                SetCustomCastResultMessage(SPELL_CUSTOM_ERROR_TARGET_TOO_FAR);
+                return SPELL_FAILED_CUSTOM_ERROR;
+            }
+
+            return SPELL_CAST_OK;
+        }
+
+        void HandleDummy(SpellEffIndex /*effIndex*/)
+        {
+          Unit* pet = GetCaster()->GetGuardianPet();
+
+            if (!pet)
+                return;
+
+            pet->CastSpell(pet->GetVictim(), SPELL_HUNTER_KILL_COMMAND_TRIGGER, true);
+        }
+        
+       
+        void Register()
+        {
+            OnCheckCast += SpellCheckCastFn(spell_hun_kill_command_SpellScript::CheckCastMeet);
+            OnEffectHit += SpellEffectFn(spell_hun_kill_command_SpellScript::HandleDummy, EFFECT_0, SPELL_EFFECT_DUMMY);
+        }
+    };
+
+    SpellScript* GetSpellScript() const override
+    {
+        return new spell_hun_kill_command_SpellScript();
+    }
+};
+
 // 34497 - Thrill of the Hunt
 class spell_hun_thrill_of_the_hunt : public SpellScriptLoader
 {
@@ -1081,6 +1199,76 @@ class spell_hun_tnt : public SpellScriptLoader
         }
 };
 
+// 77443 Focus gained through use of Steady Shot.
+class spell_hun_steady_shot_focus : public SpellScriptLoader
+{	
+public:
+    spell_hun_steady_shot_focus() : SpellScriptLoader("spell_hun_steady_shot_focus") { }
+
+    class spell_hun_steady_shot_focus_SpellScript : public SpellScript
+    {
+		PrepareSpellScript(spell_hun_steady_shot_focus_SpellScript);
+        
+	    void HandleOnHit()
+        {
+			
+			Unit* caster = GetCaster();
+			if (!caster || caster->GetTypeId() != TYPEID_PLAYER) return;
+
+			Player* player=caster->ToPlayer ();
+			if (!player) return;
+			
+			player->SetPower(POWER_FOCUS,player->GetPower(POWER_FOCUS) + 14); 
+			
+		}
+
+        void Register()
+        {           		 	
+		    OnHit += SpellHitFn(spell_hun_steady_shot_focus_SpellScript::HandleOnHit);
+        }
+    };
+
+    SpellScript* GetSpellScript() const override
+    {
+        return new spell_hun_steady_shot_focus_SpellScript();
+    }
+};
+
+// 91954 Focus gained through use of Cobra Shot. 
+class spell_hun_generic_energize_focus : public SpellScriptLoader
+{	
+public:
+    spell_hun_generic_energize_focus() : SpellScriptLoader("spell_hun_generic_energize_focus") { }
+
+    class spell_hun_generic_energize_focus_SpellScript : public SpellScript
+    {
+		PrepareSpellScript(spell_hun_generic_energize_focus_SpellScript);
+        	            
+	    void HandleOnHit()
+        {
+			Unit* caster = GetCaster();
+			if (!caster || caster->GetTypeId() != TYPEID_PLAYER) return;
+
+			Player* player=caster->ToPlayer ();
+			if (!player) return;
+
+			player->SetPower(POWER_FOCUS,player->GetPower(POWER_FOCUS) + 14); 
+			
+		}
+
+        void Register()
+        {           		 	
+		    OnHit += SpellHitFn(spell_hun_generic_energize_focus_SpellScript::HandleOnHit);
+        }
+    };
+
+    SpellScript* GetSpellScript() const override
+    {
+        return new spell_hun_generic_energize_focus_SpellScript();
+    }
+};
+
+
 void AddSC_hunter_spell_scripts()
 {
     new spell_hun_ancient_hysteria();
@@ -1105,6 +1293,9 @@ void AddSC_hunter_spell_scripts()
     new spell_hun_steady_shot();
     new spell_hun_tame_beast();
     new spell_hun_target_only_pet_and_owner();
+	new spell_hun_kill_command();
     new spell_hun_thrill_of_the_hunt();
     new spell_hun_tnt();
+	new spell_hun_steady_shot_focus();
+	new spell_hun_generic_energize_focus();
 }

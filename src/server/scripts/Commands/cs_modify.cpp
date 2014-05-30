@@ -52,6 +52,7 @@ public:
         static ChatCommand modifyCommandTable[] =
         {
             { "bit",          rbac::RBAC_PERM_COMMAND_MODIFY_BIT,          false, &HandleModifyBitCommand,           "", NULL },
+			{ "currency",     rbac::RBAC_PERM_COMMAND_MODIFY_CURRENCY,     false, &HandleModifyCurrencyCommand,      "", NULL },
             { "drunk",        rbac::RBAC_PERM_COMMAND_MODIFY_DRUNK,        false, &HandleModifyDrunkCommand,         "", NULL },
             { "energy",       rbac::RBAC_PERM_COMMAND_MODIFY_ENERGY,       false, &HandleModifyEnergyCommand,        "", NULL },
             { "faction",      rbac::RBAC_PERM_COMMAND_MODIFY_FACTION,      false, &HandleModifyFactionCommand,       "", NULL },
@@ -59,6 +60,7 @@ public:
             { "honor",        rbac::RBAC_PERM_COMMAND_MODIFY_HONOR,        false, &HandleModifyHonorCommand,         "", NULL },
             { "hp",           rbac::RBAC_PERM_COMMAND_MODIFY_HP,           false, &HandleModifyHPCommand,            "", NULL },
             { "mana",         rbac::RBAC_PERM_COMMAND_MODIFY_MANA,         false, &HandleModifyManaCommand,          "", NULL },
+			{ "focus",        rbac::RBAC_PERM_COMMAND_MODIFY_FOCUS,        false, &HandleModifyFocusCommand,         "", NULL },
             { "money",        rbac::RBAC_PERM_COMMAND_MODIFY_MONEY,        false, &HandleModifyMoneyCommand,         "", NULL },
             { "mount",        rbac::RBAC_PERM_COMMAND_MODIFY_MOUNT,        false, &HandleModifyMountCommand,         "", NULL },
             { "phase",        rbac::RBAC_PERM_COMMAND_MODIFY_PHASE,        false, &HandleModifyPhaseCommand,         "", NULL },
@@ -207,6 +209,45 @@ public:
 
         return true;
     }
+
+     //Edit Player Focus
+     static bool HandleModifyFocusCommand(ChatHandler* handler, const char* args)
+     {
+         if (!*args)
+             return false;
+
+         int32 focus = atoi((char*)args)*10;
+         int32 focusm = atoi((char*)args)*10;
+
+         if (focus <= 0 || focusm <= 0 || focusm < focus)
+         {
+             handler->SendSysMessage(LANG_BAD_VALUE);
+             handler->SetSentErrorMessage(true);
+             return false;
+         }
+
+         Player* target = handler->getSelectedPlayer();
+         if (!target)
+         {
+             handler->SendSysMessage(LANG_NO_CHAR_SELECTED);
+             handler->SetSentErrorMessage(true);
+             return false;
+         }
+
+         if (handler->HasLowerSecurity(target, 0))
+             return false;
+
+         handler->PSendSysMessage(LANG_YOU_CHANGE_FOCUS, handler->GetNameLink(target).c_str(), focus/10, focusm/10);
+          if (handler->needReportToTarget(target))
+             ChatHandler(target->GetSession()).PSendSysMessage(LANG_YOURS_FOCUS_CHANGED, handler->GetNameLink().c_str(), focus/10, focusm/10);
+
+         target->SetMaxPower(POWER_FOCUS, focusm);
+         target->SetPower(POWER_FOCUS, focus);
+
+         TC_LOG_DEBUG("misc", handler->GetTrinityString(LANG_CURRENT_FOCUS), target->GetMaxPower(POWER_FOCUS));
+
+         return true;
+     }
 
     //Edit Player Rage
     static bool HandleModifyRageCommand(ChatHandler* handler, const char* args)

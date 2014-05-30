@@ -1,5 +1,9 @@
 /*
+ *
+ * Copyright (C) 2011-2014 ArkCORE <http://www.arkania.net/>
+ *
  * Copyright (C) 2008-2014 TrinityCore <http://www.trinitycore.org/>
+ *
  * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -104,6 +108,21 @@ class MapManager
         {
             return IsValidMapCoord(loc.GetMapId(), loc.GetPositionX(), loc.GetPositionY(), loc.GetPositionZ(), loc.GetOrientation());
         }
+
+		// modulos a radian orientation to the range of 0..2PI
+		static float NormalizeOrientation(float o)
+		{
+        // fmod only supports positive numbers. Thus we have
+        // to emulate negative numbers
+			if (o < 0)
+			{
+				float mod = o *-1;
+				mod = fmod(mod, 2.0f * static_cast<float>(M_PI));
+				mod = -mod + 2.0f * static_cast<float>(M_PI);
+				return mod;
+			}
+			return fmod(o, 2.0f * static_cast<float>(M_PI));
+		}
 
         void DoDelayedMovesAndRemoves();
 

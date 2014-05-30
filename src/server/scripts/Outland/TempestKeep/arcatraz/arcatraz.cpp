@@ -1,5 +1,9 @@
 /*
+ *
+ * Copyright (C) 2011-2014 ArkCORE <http://www.arkania.net/>
+ *
  * Copyright (C) 2008-2014 TrinityCore <http://www.trinitycore.org/>
+ *
  * Copyright (C) 2006-2009 ScriptDev2 <https://scriptdev2.svn.sourceforge.net/>
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -24,7 +28,7 @@ SDCategory: Tempest Keep, The Arcatraz
 EndScriptData */
 
 /* ContentData
-npc_millhouse_manastorm
+npc_millhouse_manastorm_old
 npc_warden_mellichar
 npc_zerekethvoidzone
 EndContentData */
@@ -34,7 +38,7 @@ EndContentData */
 #include "arcatraz.h"
 
 /*#####
-# npc_millhouse_manastorm
+# npc_millhouse_manastorm_old
 #####*/
 
 enum MillhouseSays
@@ -66,14 +70,14 @@ enum MillhouseSpells
     SPELL_PYROBLAST            = 33975,
 };
 
-class npc_millhouse_manastorm : public CreatureScript
+class npc_millhouse_manastorm_old : public CreatureScript
 {
     public:
-        npc_millhouse_manastorm() : CreatureScript("npc_millhouse_manastorm") { }
+        npc_millhouse_manastorm_old() : CreatureScript("npc_millhouse_manastorm_old") { }
 
-        struct npc_millhouse_manastormAI : public ScriptedAI
+        struct npc_millhouse_manastorm_oldAI : public ScriptedAI
         {
-            npc_millhouse_manastormAI(Creature* creature) : ScriptedAI(creature)
+            npc_millhouse_manastorm_oldAI(Creature* creature) : ScriptedAI(creature)
             {
                 instance = creature->GetInstanceScript();
             }
@@ -215,7 +219,7 @@ class npc_millhouse_manastorm : public CreatureScript
 
         CreatureAI* GetAI(Creature* creature) const override
         {
-            return GetArcatrazAI<npc_millhouse_manastormAI>(creature);
+            return GetArcatrazAI<npc_millhouse_manastorm_oldAI>(creature);
         }
 };
 /*#####
@@ -536,7 +540,7 @@ class npc_zerekethvoidzone : public CreatureScript
 
 void AddSC_arcatraz()
 {
-    new npc_millhouse_manastorm();
+    new npc_millhouse_manastorm_old();
     new npc_warden_mellichar();
     new npc_zerekethvoidzone();
 }

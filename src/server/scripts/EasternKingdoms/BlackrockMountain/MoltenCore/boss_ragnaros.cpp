@@ -1,5 +1,9 @@
 /*
+ *
+ * Copyright (C) 2011-2014 ArkCORE <http://www.arkania.net/>
+ *
  * Copyright (C) 2008-2014 TrinityCore <http://www.trinitycore.org/>
+ *
  * Copyright (C) 2006-2009 ScriptDev2 <https://scriptdev2.svn.sourceforge.net/>
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -306,14 +310,14 @@ class boss_ragnaros : public CreatureScript
         }
 };
 
-class npc_son_of_flame : public CreatureScript
+class npc_son_of_flame_pre : public CreatureScript
 {
     public:
-        npc_son_of_flame() : CreatureScript("npc_SonOfFlame") { }
+        npc_son_of_flame_pre() : CreatureScript("npc_SonOfFlame") { }
 
-        struct npc_son_of_flameAI : public ScriptedAI //didnt work correctly in EAI for me...
+        struct npc_son_of_flame_preAI : public ScriptedAI //didnt work correctly in EAI for me...
         {
-            npc_son_of_flameAI(Creature* creature) : ScriptedAI(creature)
+            npc_son_of_flame_preAI(Creature* creature) : ScriptedAI(creature)
             {
                 instance = me->GetInstanceScript();
             }
@@ -337,12 +341,12 @@ class npc_son_of_flame : public CreatureScript
 
         CreatureAI* GetAI(Creature* creature) const override
         {
-            return GetInstanceAI<npc_son_of_flameAI>(creature);
+            return GetInstanceAI<npc_son_of_flame_preAI>(creature);
         }
 };
 
 void AddSC_boss_ragnaros()
 {
     new boss_ragnaros();
-    new npc_son_of_flame();
+    new npc_son_of_flame_pre();
 }

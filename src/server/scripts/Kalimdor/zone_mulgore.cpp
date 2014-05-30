@@ -1,5 +1,9 @@
 /*
+ *
+ * Copyright (C) 2011-2014 ArkCORE <http://www.arkania.net/>
+ *
  * Copyright (C) 2008-2014 TrinityCore <http://www.trinitycore.org/>
+ *
  * Copyright (C) 2006-2009 ScriptDev2 <https://scriptdev2.svn.sourceforge.net/>
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -24,6 +28,7 @@ SDCategory: Mulgore
 EndScriptData */
 
 /* ContentData
+npc_skorn_whitecloud
 npc_kyle_frenzied
 EndContentData */
 
@@ -32,6 +37,48 @@ EndContentData */
 #include "ScriptedGossip.h"
 #include "Player.h"
 #include "SpellInfo.h"
+
+enum Mulgore
+{
+	NPC_FLEDGLING_BRAVE						= 36942,
+	NPC_BRISTLEBACK_INVADER					= 36943,
+
+};
+
+/*######
+# npc_skorn_whitecloud
+######*/
+
+#define GOSSIP_SW "Tell me a story, Skorn."
+
+class npc_skorn_whitecloud : public CreatureScript
+{
+public:
+    npc_skorn_whitecloud() : CreatureScript("npc_skorn_whitecloud") { }
+
+    bool OnGossipSelect(Player* player, Creature* creature, uint32 /*sender*/, uint32 action)
+    {
+        player->PlayerTalkClass->ClearMenus();
+        if (action == GOSSIP_ACTION_INFO_DEF)
+            player->SEND_GOSSIP_MENU(523, creature->GetGUID());
+
+        return true;
+    }
+
+    bool OnGossipHello(Player* player, Creature* creature)
+    {
+        if (creature->IsQuestGiver())
+            player->PrepareQuestMenu(creature->GetGUID());
+
+        if (!player->GetQuestRewardStatus(770))
+            player->ADD_GOSSIP_ITEM(GOSSIP_ICON_CHAT, GOSSIP_SW, GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF);
+
+        player->SEND_GOSSIP_MENU(522, creature->GetGUID());
+
+        return true;
+    }
+
+};
 
 /*#####
 # npc_kyle_frenzied
@@ -164,7 +211,139 @@ public:
 
 };
 
+/*#####
+# npc_wounded_brave
+######*/
+
+class npc_wounded_brave : public CreatureScript
+{
+public:
+    npc_wounded_brave() : CreatureScript("npc_wounded_brave") { }
+ 
+    struct npc_wounded_braveAI : public ScriptedAI
+    {
+        npc_wounded_braveAI(Creature* creature) : ScriptedAI(creature) { }
+     
+        void SpellHit(Unit* Hitter, SpellInfo const* spell)
+        {           	
+			printf("Trigger Spell  %d \n", spell->Id);
+
+			if (Player* player = Hitter->ToPlayer())
+			{
+				if (spell->Id==2061) player->KilledMonsterCredit (44175);
+			}      
+        }
+    };
+
+	CreatureAI* GetAI(Creature* creature) const override
+    {
+        return new npc_wounded_braveAI (creature);
+    }
+
+};
+
+/*######
+## npc_fledgling_brave
+######*/
+
+class npc_fledgling_brave : public CreatureScript
+{
+public:
+    npc_fledgling_brave() : CreatureScript("npc_fledgling_brave") { }
+
+    struct npc_fledgling_braveAI : public ScriptedAI
+    {
+        npc_fledgling_braveAI(Creature *c) : ScriptedAI(c) {}
+
+        uint32 _timer;        	
+
+        void Reset()  override
+        {
+            _timer = urand(1800,2200);           			
+        }
+
+        void UpdateAI(uint32 diff) override
+        {						
+            if (!UpdateVictim())
+			{
+				if (Creature* invader = me->FindNearestCreature (NPC_BRISTLEBACK_INVADER, 3.0f)) 
+				{
+					if (_timer <= diff)
+					{
+						me->SetFacingTo (me->GetAngle(invader));
+						me->HandleEmoteCommand(EMOTE_ONESHOT_ATTACK1H);
+						_timer = urand(1800,2200);
+					}
+					else _timer -= diff;
+				}
+			} else 
+				DoMeleeAttackIfReady();
+			
+        }
+    };
+
+	   CreatureAI* GetAI(Creature* pCreature) const  override
+    {
+        return new npc_fledgling_braveAI (pCreature);
+    }
+};
+
+/*######
+## npc_bristleback_invader
+######*/
+
+class npc_bristleback_invader : public CreatureScript
+{
+public:
+    npc_bristleback_invader() : CreatureScript("npc_bristleback_invader") { }
+
+    struct npc_bristleback_invaderAI : public ScriptedAI
+    {
+        npc_bristleback_invaderAI(Creature *c) : ScriptedAI(c) {}
+
+        uint32 _timer;        	
+
+        void Reset()  override
+        {
+            _timer = urand(1800,2200);           			
+        }
+
+        void UpdateAI(uint32 diff) override
+        {						
+            if (!UpdateVictim())
+			{
+				if (Creature* brave = me->FindNearestCreature (NPC_FLEDGLING_BRAVE, 3.0f)) 
+				{
+					if (_timer <= diff)
+					{
+						me->SetFacingTo (me->GetAngle(brave));
+						me->HandleEmoteCommand(EMOTE_ONESHOT_ATTACK1H);
+						_timer = urand(1800,2200);
+					}
+					else _timer -= diff;
+				}
+			} else 
+				DoMeleeAttackIfReady();
+			
+        }
+    };
+
+	CreatureAI* GetAI(Creature* pCreature) const  override
+    {
+        return new npc_bristleback_invaderAI (pCreature);
+    }
+};
+
+
+
+
+
 void AddSC_mulgore()
 {
+    new npc_skorn_whitecloud();
     new npc_kyle_frenzied();
+	new npc_wounded_brave();
+	new npc_fledgling_brave();
+	new npc_bristleback_invader();
+
 }
