@@ -1223,6 +1223,10 @@ bool Player::Create(uint32 guidlow, CharacterCreateInfo* createInfo)
 	if (getClass() == CLASS_WARRIOR)
 		CastSpell(this, 2457, true); //go into battle stance
 
+	// If Gnome, add Irradiated aura
+	if (getRace() == RACE_GNOME)
+		CastSpell(this, 80653, true);
+
     return true;
 }
 
